@@ -1,0 +1,91 @@
+/* The contacts plugin's own LAYOUT, on top of muster's UI kit (kit.css,
+   docs/ui-kit.md). 🔴 Every colour, radius, duration and easing here is a kit
+   token (--mu-*): no colour is written in this file, so the install's theme
+   is the plugin's theme (TestThePluginCSSWritesNoColour fails on a literal).
+   Components (buttons, chips, sheets, inputs, avatars) are the kit's
+   classes; this file only places them.
+
+   🔴 Motion: every transition and animation here takes a --mu-dur-* token,
+   which kit.css sets to 0ms under prefers-reduced-motion, so all of it stops
+   with the kit's own (e2e/contacts.spec.ts measures it). */
+
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; }
+h1 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; margin: 0; }
+h2 { font-size: 1.0625rem; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.page { max-width: 44rem; margin: 0 auto; padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left)); }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+.bar__end { display: flex; align-items: center; gap: .125rem; }
+.status { min-height: 1.5em; margin: .5rem 0; color: rgb(var(--mu-text2)); font-size: .875rem; }
+.status:empty { display: none; }
+.notice { text-align: center; padding-top: 3rem; }
+.notice p { color: rgb(var(--mu-text2)); }
+.muted { color: rgb(var(--mu-muted)); font-size: .875rem; }
+.empty { text-align: center; padding: 2.5rem 1rem; color: rgb(var(--mu-muted)); }
+.empty .mu-icon { width: 2.5rem; height: 2.5rem; display: block; margin: 0 auto .75rem; }
+
+/* The search field stays on screen while the list scrolls (phones). */
+.search { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; padding: .25rem 0 .5rem; background: rgb(var(--mu-bg)); }
+.search .mu-input { width: 100%; padding-left: 2.5rem; }
+.search__icon { position: absolute; left: .75rem; color: rgb(var(--mu-muted)); pointer-events: none; display: inline-flex; }
+
+.contacts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .375rem; }
+.contact { animation: rise var(--mu-dur-base) var(--mu-ease-enter);
+  transition: opacity var(--mu-dur-base) var(--mu-ease-exit), transform var(--mu-dur-base) var(--mu-ease-exit); }
+.contact.leaving { opacity: 0; transform: scale(.98); }
+.contact.new .contact__main { box-shadow: inset 3px 0 0 rgb(var(--mu-accent)), inset 0 0 0 1px rgb(var(--mu-line)); }
+.contact__main { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; gap: .75rem; min-height: 3.5rem;
+  padding: .5rem .75rem; border-radius: var(--mu-radius-md); cursor: pointer;
+  background: rgb(var(--mu-s1)); box-shadow: inset 0 0 0 1px rgb(var(--mu-line));
+  transition: background var(--mu-dur-fast) var(--mu-ease-standard); }
+.contact__main:hover { background: rgb(var(--mu-s2)); }
+.contact__main:focus-visible { outline: 2px solid rgb(var(--mu-focus)); outline-offset: 2px; }
+.contact__text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.contact__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact__email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact .origin { flex: 0 0 auto; }
+.more { margin-top: .75rem; }
+
+/* ---- the contact sheet ---- */
+.contact-sheet .mu-sheet__header { gap: .5rem; }
+.sheet-title { display: flex; align-items: center; gap: .625rem; min-width: 0; }
+.sheet-actions { display: flex; align-items: center; flex: 0 0 auto; }
+.view { display: flex; flex-direction: column; gap: 1rem; }
+.lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+.line { display: flex; align-items: center; gap: .625rem; min-height: 2.75rem; padding: .25rem 0; overflow-wrap: anywhere;
+  animation: rise var(--mu-dur-base) var(--mu-ease-enter); }
+.line > .mu-icon { color: rgb(var(--mu-muted)); }
+.line__text { flex: 1 1 auto; min-width: 0; }
+.line__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; color: inherit; text-decoration: none; border-radius: var(--mu-radius-sm); }
+a.line__main:hover .line__title { text-decoration: underline; }
+a.line__main:focus-visible { outline: 2px solid rgb(var(--mu-focus)); outline-offset: 2px; }
+.line__title { font-weight: 600; }
+.note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: rgb(var(--mu-text2)); }
+.section { display: flex; align-items: center; gap: .5rem; margin: 0 0 .25rem; font-size: .8125rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: rgb(var(--mu-muted)); }
+.origin .line { min-height: 2rem; font-size: .875rem; color: rgb(var(--mu-text2)); }
+
+.edit { display: flex; flex-direction: column; gap: 1rem; }
+.emails-edit { display: flex; flex-direction: column; gap: .5rem; }
+.email-field { display: flex; align-items: center; gap: .25rem; }
+.email-field .mu-input { flex: 1 1 auto; min-width: 0; }
+.edit .mu-textarea, .edit .mu-input { width: 100%; }
+.add-email { align-self: flex-start; }
+.merge { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem .75rem;
+  border-radius: var(--mu-radius-md); background: rgb(var(--mu-st-warning-bg)); color: rgb(var(--mu-st-warning-fg)); }
+
+/* ---- settings ---- */
+.settings { display: flex; flex-direction: column; gap: 1rem; }
+.switchrow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.danger { display: flex; flex-direction: column; gap: .75rem; padding-top: 1rem; border-top: 1px solid rgb(var(--mu-line)); }
+
+/* Phones: the sheet is the whole height, so the form never hides under it. */
+@media (max-width: 639px) {
+  .contact-sheet { max-height: 100dvh; height: 100dvh; border-radius: 0; }
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(.25rem); } to { opacity: 1; transform: none; } }

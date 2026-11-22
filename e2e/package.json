@@ -1,0 +1,14 @@
+{
+  "name": "muster-contacts-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser tests (Playwright, Chromium) against the fake muster: the Contacts tab at a phone's size and a desktop's.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^22.0.0"
+  }
+}

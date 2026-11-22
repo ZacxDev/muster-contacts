@@ -1,0 +1,44 @@
+# muster-contacts, phase 1: the plugin, for muster's own namespace, beside
+# muster-meetings. A BASE: it carries no real hostname, address or
+# namespace. A tenant overlay sets them (see deploy/example-overlay and the
+# README's "Deploying" section):
+#
+#   - hostnames, muster's address, the Meetings app's id: the
+#     `muster-contacts-params` ConfigMap (configMapGenerator, behavior: merge)
+#   - the namespace: `namespace:`
+#   - the image: `images:` (pin a digest, or a sha-<commit> tag)
+#   - the PVC's StorageClass, the Secret's name, and the NetworkPolicy's
+#     selectors for muster, the ingress controller and the meetings plugin:
+#     patches
+#
+# Not here: the Ingress/IngressRoute for the public listener (the cluster's
+# ingress is the tenant's), and meetings' own NetworkPolicy, which must
+# admit its pods to this plugin's :8081 (that is meetings' manifest).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: muster-contacts
+    includeSelectors: false
+
+resources:
+  - muster-contacts.yaml
+  - networkpolicy.yaml
+
+configMapGenerator:
+  - name: muster-contacts-params
+    literals:
+      # Where the plugin calls muster: its Service, FULLY QUALIFIED with the
+      # trailing dot (<svc>.<ns>.svc.<cluster-domain>.). Plain http is allowed
+      # only in that form.
+      - muster-url=http://muster.muster-tenant.svc.cluster.local.:8105
+      - cluster-domain=cluster.local
+      # muster's origin as browsers see it (the only page that may frame the app).
+      - muster-origin=https://muster.example.test
+      # This plugin's ONE-LABEL host (a free edge certificate covers one
+      # level): contacts-<x>.<domain>, never <x>.contacts.<domain>.
+      - public-url=https://contacts-muster.example.test
+      # The Meetings app's id on muster (`muster-server app list`), so a
+      # contact's meeting opens in the Meetings tab. Empty: no link.
+      - meetings-app-id=

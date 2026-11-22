@@ -1,0 +1,52 @@
+# The plugin's NetworkPolicy: default-deny in both directions, then
+#
+#   in:  :8080 from the ingress controller's namespace (the owner's page)
+#        :8081 from the meetings plugin's pods only (the contacts API)
+#   out: muster's pods (its API: the redeem, /self, owners/check, the kit)
+#        and DNS. Nothing else: contacts calls nothing but muster.
+#
+# PATCH TARGETS for the tenant: the ingress controller's namespace label
+# (ingress/0), the meetings plugin's pod labels (ingress/1), muster's pod
+# labels and port (egress/0), and the DNS selector (egress/1) if the
+# cluster's DNS pods are labelled differently. meetings' own NetworkPolicy
+# must admit its egress to this plugin's :8081, and muster's (if it has one)
+# this plugin's pods to its API port: those are their manifests, not these.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: muster-contacts
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: muster-contacts
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-controller
+      ports:
+        - {protocol: TCP, port: 8080}
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: muster-meetings
+      ports:
+        - {protocol: TCP, port: 8081}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: muster
+      ports:
+        - {protocol: TCP, port: 8105}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}

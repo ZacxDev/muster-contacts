@@ -1,0 +1,2340 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "name": "owners: a person who never opened Contacts is accepting",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 200,
+     "expect": {
+      "accepting": true
+     }
+    }
+   ]
+  },
+  {
+   "name": "owners: a person who opened Contacts is accepting",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 200,
+     "expect": {
+      "accepting": true
+     }
+    }
+   ],
+   "given": [
+    "owner_redeemed"
+   ]
+  },
+  {
+   "name": "owners: expired is accepting (the normal state)",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 200,
+     "expect": {
+      "accepting": true
+     }
+    }
+   ],
+   "given": [
+    "owner_expired"
+   ]
+  },
+  {
+   "name": "owners: revoked is not accepting",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 404,
+     "expect": {
+      "error": "not accepting"
+     }
+    }
+   ],
+   "given": [
+    "owner_revoked"
+   ]
+  },
+  {
+   "name": "owners: Add people from Meetings off is not accepting",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 404,
+     "expect": {
+      "error": "not accepting"
+     }
+    }
+   ],
+   "given": [
+    "collect_off"
+   ]
+  },
+  {
+   "name": "owners: an owner that is not a subject is refused",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/not-a-subject",
+     "status": 400,
+     "expect": {
+      "error": "owner is not a subject"
+     }
+    }
+   ]
+  },
+  {
+   "name": "auth: none token is 401 on owners",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "none"
+    }
+   ]
+  },
+  {
+   "name": "auth: none token is 401 on submissions",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "none"
+    }
+   ]
+  },
+  {
+   "name": "auth: wrong token is 401 on owners",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "wrong"
+    }
+   ]
+  },
+  {
+   "name": "auth: wrong token is 401 on submissions",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "wrong"
+    }
+   ]
+  },
+  {
+   "name": "auth: prefix token is 401 on owners",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "prefix"
+    }
+   ]
+  },
+  {
+   "name": "auth: prefix token is 401 on submissions",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "prefix"
+    }
+   ]
+  },
+  {
+   "name": "auth: extended token is 401 on owners",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "extended"
+    }
+   ]
+  },
+  {
+   "name": "auth: extended token is 401 on submissions",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "extended"
+    }
+   ]
+  },
+  {
+   "name": "auth: scheme token is 401 on owners",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/owners/{owner}",
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "scheme"
+    }
+   ]
+  },
+  {
+   "name": "auth: scheme token is 401 on submissions",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 401,
+     "expect": {
+      "error": "unauthorised"
+     },
+     "auth": "scheme"
+    }
+   ]
+  },
+  {
+   "name": "submission: a new email is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "submission: a person who never opened Contacts gets the card (decision 8)",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "submission: expired is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ],
+   "given": [
+    "owner_expired"
+   ]
+  },
+  {
+   "name": "submission: revoked is dropped, and answers exactly as an accepted one",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ],
+   "given": [
+    "owner_revoked"
+   ]
+  },
+  {
+   "name": "submission: collect off is dropped, and answers exactly as an accepted one",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ],
+   "given": [
+    "collect_off"
+   ]
+  },
+  {
+   "name": "submission answers alike: a new contact, a merge into it, and a case-differing merge",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    },
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card2}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card2}",
+      "meeting": {
+       "id": "mtgBravo0002",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partBravo002",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "Grace@Example.TEST"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "idempotency: the same key and body answers again, alike",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    },
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "idempotency: the same key with a different body is 409",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    },
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "ada@example.test"
+     },
+     "status": 409,
+     "expect": {
+      "error": "this Idempotency-Key was used with a different body"
+     }
+    }
+   ]
+  },
+  {
+   "name": "idempotency: a missing key is 400",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "Idempotency-Key is missing or is not this request's key"
+     }
+    }
+   ]
+  },
+  {
+   "name": "idempotency: a key that is not card:<card_id> is 400",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "Idempotency-Key is missing or is not this request's key"
+     }
+    }
+   ]
+  },
+  {
+   "name": "rate limit: past the owner's daily cards is 429 with Retry-After",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 429,
+     "expect": {
+      "error": "too many cards: try again later"
+     },
+     "headers": {
+      "Retry-After": "$int"
+     }
+    }
+   ],
+   "given": [
+    "card_limit_reached"
+   ]
+  },
+  {
+   "name": "body: an unknown field is 400",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test",
+      "extra": "x"
+     },
+     "status": 400,
+     "expect": {
+      "error": "the body is not this route's JSON object"
+     }
+    }
+   ]
+  },
+  {
+   "name": "body: more than 4 KiB is 413",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "raw_body": "$big",
+     "status": 413,
+     "expect": {
+      "error": "the body is too large"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field: a bad owner is 400 naming it",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "not-a-subject",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "owner"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field: a bad card_id is 400 naming it",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:short",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "short",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "card_id"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field: a bad meeting.id is 400 naming it",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "has space",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "meeting.id"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field: a meeting title over 80 characters is 400 naming it",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "meeting.title"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field: an empty typed name is 400 naming it",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "participant.typed_name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #5 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #6 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #7 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "   ",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #8 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Ada‮evol",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #9 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Ada\nLovelace",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #10 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "‍‍",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #11 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "⠀",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: name #12 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Ada​L",
+      "email": "grace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "name"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #0 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #1 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "  Grace@Example.TEST "
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #2 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "ada+work@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #3 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "a.da@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #4 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "ada@bücher.example"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #5 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "ADA@BÜCHER.EXAMPLE"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #6 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "zoë@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #7 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #8 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #9 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "a@dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #10 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": ""
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #11 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #12 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #13 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #14 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "a@b@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #15 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@localhost"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #16 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@exa mple.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #17 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "gr ace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #18 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "Grace <grace@example.test>"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #19 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "<grace@example.test>"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #20 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test, ada@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #21 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace,ada@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #22 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace;ada@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #23 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test;"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #24 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "\"grace\"@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #25 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example..test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #26 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@-example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #27 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.123"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #28 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "gr‮ace@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "field table: email #29 is accepted",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace@example.test\n"
+     },
+     "status": 202,
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "field table: email #30 is refused",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/submissions",
+     "key": "card:{card}",
+     "body": {
+      "owner": "{owner}",
+      "card_id": "{card}",
+      "meeting": {
+       "id": "mtgAlpha0001",
+       "title": "Weekly sync",
+       "started_at": "{t1}",
+       "ended_at": "{t2}"
+      },
+      "participant": {
+       "id": "partAlpha001",
+       "identity": "guest-alpha0001",
+       "typed_name": "Grace",
+       "joined_at": "{t1}",
+       "left_at": "{t2}"
+      },
+      "name": "Grace",
+      "email": "grace\n@example.test"
+     },
+     "status": 400,
+     "expect": {
+      "error": "invalid field",
+      "field": "email"
+     }
+    }
+   ]
+  },
+  {
+   "name": "unknown route is 404",
+   "steps": [
+    {
+     "method": "GET",
+     "path": "/v1/contacts",
+     "status": 404,
+     "expect": {
+      "error": "not found"
+     }
+    }
+   ]
+  },
+  {
+   "name": "removed in phase 1: POST /v1/receipts/check is 404",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/receipts/check",
+     "body": {
+      "owner": "{owner}"
+     },
+     "status": 404,
+     "expect": {
+      "error": "not found"
+     }
+    }
+   ]
+  },
+  {
+   "name": "removed in phase 1: POST /v1/attendance is 404",
+   "steps": [
+    {
+     "method": "POST",
+     "path": "/v1/attendance",
+     "body": {
+      "owner": "{owner}"
+     },
+     "status": 404,
+     "expect": {
+      "error": "not found"
+     }
+    }
+   ]
+  }
+ ]
+}

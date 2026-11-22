@@ -27,6 +27,69 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+      # kubectl renders deploy/kubernetes for ./deploy's tests and their
+      # mutants (CONTACTS_REQUIRE_KUBECTL=1: fail, never skip); kubeconform
+      # checks the rendered objects against the Kubernetes schemas. Both
+      # pinned, checked by SHA-256.
+      - name: kubectl and kubeconform (pinned)
+        env:
+          KUBECTL_VERSION: v1.37.2
+          KUBECTL_SHA256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
+          KUBECONFORM_VERSION: v0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+        run: |
+          mkdir -p /tmp/k8s
+          curl -sSfL -o /tmp/k8s/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  /tmp/k8s/kubectl" | sha256sum -c -
+          chmod +x /tmp/k8s/kubectl
+          curl -sSfL -o /tmp/kubeconform.tgz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  /tmp/kubeconform.tgz" | sha256sum -c -
+          tar -xzf /tmp/kubeconform.tgz -C /tmp/k8s kubeconform
+          echo "/tmp/k8s" >> "$GITHUB_PATH"
+          echo "CONTACTS_REQUIRE_KUBECTL=1" >> "$GITHUB_ENV"
+      - name: render and validate deploy/kubernetes and the example overlay
+        run: |
+          for d in deploy/kubernetes deploy/example-overlay; do
+            kubectl kustomize "$d" > /tmp/rendered.yaml
+            kubeconform -strict -summary /tmp/rendered.yaml
+          done
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
+      # Unit, store, API contract (contactsapi's table against the real
+      # server), owner API, no-PII-in-logs, limits, assets and deploy tests.
       - run: go test -race ./...
+      - name: guard mutation sweep (each guard's mutant must turn its named test red)
+        run: go run ./scripts/mutate
+
+  e2e:
+    name: e2e (playwright, chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: npm ci
+        working-directory: e2e
+        run: npm ci
+      - name: install chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+      # The Contacts tab at 390x844 and 1280x800 (list, search, the sheet,
+      # Edit, Add, Delete), the empty state and owner scoping across people,
+      # Escape and Merge, Download all, reduced motion, the UI kit's theme and
+      # its failure, and the /enter frame gate. Count the passes:
+      # `playwright test` exits 0 when everything skipped.
+      - name: playwright test
+        working-directory: e2e
+        run: |
+          set -o pipefail
+          npx playwright test --project=chromium 2>&1 | tee /tmp/e2e.log
+          grep -qE '^\s+8 passed \(' /tmp/e2e.log
+      # The UI mutants: each must turn its named Playwright test red (and the
+      # no-op control must not).
+      - name: UI mutation sweep (each UI mutant's named Playwright test must go red)
+        run: go run ./scripts/mutate -e2e

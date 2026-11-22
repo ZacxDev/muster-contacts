@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Contacts</title>
+<link rel="stylesheet" href="{{kit "kit.css"}}">
+<link rel="stylesheet" href="{{asset "app.css"}}">
+</head>
+<body class="mu-root">
+{{- if .Session}}
+<main id="app" data-session="{{.Session}}"{{if .Ref}} data-ref="{{.Ref}}"{{end}}{{if .Meetings}} data-meetings="{{.Meetings}}"{{end}}>
+  <!-- The icons the kit does not have yet (design: open question 6), on its
+       24-unit grid in currentColor; .mu-icon draws them as the kit's. -->
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" width="0" height="0">
+    <symbol id="mc-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></symbol>
+    <symbol id="mc-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m14 6 4 4"/></symbol>
+    <symbol id="mc-bin" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></symbol>
+    <symbol id="mc-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></symbol>
+    <symbol id="mc-envelope" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+    <symbol id="mc-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  </svg>
+
+  <section id="list-view" class="page">
+    <header class="bar">
+      <h1>Contacts</h1>
+      <div class="bar__end">
+        <button id="btn-add" type="button" class="mu-icon-btn" aria-label="Add contact" data-icon="plus"></button>
+        <button id="btn-settings" type="button" class="mu-icon-btn" aria-label="Settings" data-icon="more"></button>
+      </div>
+    </header>
+    <div class="search">
+      <span class="search__icon" data-icon="search"></span>
+      <input id="q" class="mu-input" type="search" aria-label="Search contacts" placeholder="Search" autocomplete="off" spellcheck="false" maxlength="100">
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p id="empty" class="empty" hidden><span data-icon="mc-person"></span><span id="empty-text"></span></p>
+    <ul id="contacts" class="contacts" aria-label="Contacts"></ul>
+    <button id="more" type="button" class="mu-btn mu-btn--secondary mu-btn--block more" hidden>More</button>
+  </section>
+
+  <!-- One contact: its details, or (Add, Edit) the form in the same sheet. -->
+  <div id="sheet" class="mu-sheet contact-sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+    <div class="mu-sheet__header">
+      <div class="sheet-title"><span id="sheet-avatar" class="mu-avatar mu-avatar--sm" aria-hidden="true"></span><h2 id="sheet-title"></h2></div>
+      <div class="sheet-actions">
+        <button id="btn-edit" type="button" class="mu-icon-btn" aria-label="Edit" data-icon="mc-pencil"></button>
+        <button id="btn-download" type="button" class="mu-icon-btn" aria-label="Download" data-icon="mc-download"></button>
+        <button id="btn-delete" type="button" class="mu-icon-btn" aria-label="Delete" data-icon="mc-bin"></button>
+        <button type="button" class="mu-icon-btn" aria-label="Close" data-icon="close" data-mu-close></button>
+      </div>
+    </div>
+    <div class="mu-sheet__body">
+      <div id="view" class="view">
+        <ul id="d-emails" class="lines" aria-label="Emails"></ul>
+        <p id="d-note" class="note" hidden></p>
+        <section id="d-met" aria-labelledby="met-title">
+          <h3 id="met-title" class="section"><span data-icon="mc-calendar"></span>Met</h3>
+          <ul id="d-meetings" class="lines"></ul>
+        </section>
+        <ul id="d-origin" class="lines origin" aria-label="Where this contact came from"></ul>
+      </div>
+      <form id="edit" class="edit" hidden novalidate>
+        <label class="mu-field"><span class="mu-label">Name</span><input id="f-name" class="mu-input" type="text" maxlength="80" autocomplete="off"></label>
+        <div class="mu-field" role="group" aria-labelledby="f-emails-label">
+          <span id="f-emails-label" class="mu-label">Email</span>
+          <div id="f-emails" class="emails-edit"></div>
+          <button id="f-add-email" type="button" class="mu-btn mu-btn--ghost mu-btn--sm add-email" data-icon="plus">Email</button>
+        </div>
+        <label class="mu-field"><span class="mu-label">Note</span><textarea id="f-note" class="mu-textarea" rows="3" maxlength="2000"></textarea></label>
+        <p id="f-error" class="mu-error" role="alert" hidden></p>
+        <div id="f-merge" class="merge" hidden>
+          <span id="f-merge-text"></span>
+          <button id="f-merge-btn" type="button" class="mu-btn mu-btn--secondary mu-btn--sm">Merge</button>
+        </div>
+      </form>
+    </div>
+    <div id="edit-footer" class="mu-sheet__footer" hidden>
+      <button id="btn-cancel" type="button" class="mu-btn mu-btn--ghost">Cancel</button>
+      <button id="btn-save" type="submit" form="edit" class="mu-btn mu-btn--primary" data-icon="check">Save</button>
+    </div>
+  </div>
+
+  <div id="confirm" class="mu-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <div class="mu-sheet__header">
+      <h2 id="confirm-title"></h2>
+      <button type="button" class="mu-icon-btn" aria-label="Close" data-icon="close" data-mu-close></button>
+    </div>
+    <div class="mu-sheet__body"><p class="muted">Removes their details and meeting history here. Meetings keeps its own record of the calls.</p></div>
+    <div class="mu-sheet__footer">
+      <button type="button" class="mu-btn mu-btn--ghost" data-mu-close>Cancel</button>
+      <button id="confirm-delete" type="button" class="mu-btn mu-btn--danger" data-icon="mc-bin">Delete</button>
+    </div>
+  </div>
+
+  <div id="settings" class="mu-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="mu-sheet__header">
+      <h2 id="settings-title">Settings</h2>
+      <button type="button" class="mu-icon-btn" aria-label="Close" data-icon="close" data-mu-close></button>
+    </div>
+    <div class="mu-sheet__body settings">
+      <label class="switchrow"><span>Add people from Meetings</span><input id="s-collect" class="mu-switch" type="checkbox" role="switch"></label>
+      <button id="s-download" type="button" class="mu-btn mu-btn--secondary mu-btn--block" data-icon="mc-download">Download all</button>
+      <div class="danger">
+        <label class="mu-field"><span class="mu-label">Type “delete everything” to delete every contact</span>
+          <input id="s-confirm" class="mu-input" type="text" autocomplete="off" spellcheck="false"></label>
+        <button id="s-erase" type="button" class="mu-btn mu-btn--danger mu-btn--block" data-icon="mc-bin" disabled>Delete everything</button>
+      </div>
+    </div>
+  </div>
+  <noscript><p>Contacts needs JavaScript.</p></noscript>
+</main>
+<script src="{{kit "kit.js"}}"></script>
+<script src="{{asset "ui.js"}}"></script>
+<script src="{{asset "app.js"}}"></script>
+{{- else}}
+<main class="page notice">
+  <h1>Contacts</h1>
+  <p id="message">{{.Message}}</p>
+</main>
+{{- end}}
+</body>
+</html>
