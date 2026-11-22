@@ -1,0 +1,138 @@
+# The plugin: one replica, Recreate (one SQLite writer), nonroot, read-only
+# root filesystem; SQLite on a PVC, SQLite's temporary files on an emptyDir.
+#
+# The Secret it reads (create it before applying; its name is a patch
+# target):
+#   muster-contacts  MUSTER_PLUGIN_TOKEN (from `muster-server app install …
+#                    --link-to <meetings id>`), CONTACTS_API_TOKEN
+#                    (openssl rand -base64 32: the SAME value goes in
+#                    meetings' MEETINGS_CONTACTS_TOKEN)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: muster-contacts-state
+  labels:
+    app.kubernetes.io/name: muster-contacts
+spec:
+  accessModes: [ReadWriteOnce]
+  # storageClassName: set by the overlay (a patch); unset uses the default.
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: muster-contacts
+  labels:
+    app.kubernetes.io/name: muster-contacts
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: muster-contacts
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: muster-contacts
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: muster-contacts
+          # :main moves with every green commit on main. An overlay MUST pin
+          # a digest or a sha-<commit> tag with `images:`, never run :main.
+          image: ghcr.io/zacxdev/muster-contacts:main
+          ports:
+            - name: http
+              containerPort: 8080
+            # /healthz and the contacts API: the meetings plugin's alone.
+            - name: internal
+              containerPort: 8081
+          env:
+            - name: MUSTER_URL
+              valueFrom: {configMapKeyRef: {name: muster-contacts-params, key: muster-url}}
+            - name: CONTACTS_CLUSTER_DOMAIN
+              valueFrom: {configMapKeyRef: {name: muster-contacts-params, key: cluster-domain}}
+            - name: MUSTER_ORIGIN
+              valueFrom: {configMapKeyRef: {name: muster-contacts-params, key: muster-origin}}
+            - name: CONTACTS_PUBLIC_URL
+              valueFrom: {configMapKeyRef: {name: muster-contacts-params, key: public-url}}
+            - name: CONTACTS_MEETINGS_APP_ID
+              valueFrom: {configMapKeyRef: {name: muster-contacts-params, key: meetings-app-id}}
+            - name: STATE_DIR
+              value: /state
+            - name: CONTACTS_LISTEN
+              value: ":8080"
+            - name: CONTACTS_INTERNAL_LISTEN
+              value: ":8081"
+            - name: MUSTER_PLUGIN_TOKEN
+              valueFrom: {secretKeyRef: {name: muster-contacts, key: MUSTER_PLUGIN_TOKEN}}
+            - name: CONTACTS_API_TOKEN
+              valueFrom: {secretKeyRef: {name: muster-contacts, key: CONTACTS_API_TOKEN}}
+          volumeMounts:
+            - name: state
+              mountPath: /state
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          # The plugin judges every person who opened Contacts against muster
+          # BEFORE it listens, so the startup probe allows a long boot.
+          startupProbe:
+            httpGet: {path: /healthz, port: internal}
+            periodSeconds: 10
+            failureThreshold: 90
+          readinessProbe:
+            httpGet: {path: /healthz, port: internal}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: internal}
+            periodSeconds: 20
+            failureThreshold: 6
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: muster-contacts-state
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# :8080 is public (route contacts-<x>.<domain> to it). :8081 is internal:
+# /healthz and the contacts API; never route it, and the NetworkPolicy
+# admits only the meetings plugin's pods to it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: muster-contacts
+  labels:
+    app.kubernetes.io/name: muster-contacts
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: muster-contacts
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: internal
+      port: 8081
+      targetPort: internal

@@ -22,5 +22,7 @@ secretGroup = 1
 keywords = ["mpl_"]
 
 [[allowlists]]
-description = "test fixture, not a credential"
-regexes = ['''^mpl_s3cretT0ken$''']
+description = "test fixtures, not credentials (each matched exactly)"
+regexes = [
+  '''^mpl_s3cretT0ken$''',
+]

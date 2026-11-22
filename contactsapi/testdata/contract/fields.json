@@ -1,0 +1,206 @@
+{
+ "version": 1,
+ "names": [
+  {
+   "input": "Grace",
+   "ok": true,
+   "clean": "Grace"
+  },
+  {
+   "input": "  Grace Hopper  ",
+   "ok": true,
+   "clean": "Grace Hopper"
+  },
+  {
+   "input": "Zoë",
+   "ok": true,
+   "clean": "Zoë"
+  },
+  {
+   "input": "👩‍💻",
+   "ok": true,
+   "clean": "👩‍💻"
+  },
+  {
+   "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "ok": true,
+   "clean": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  {
+   "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "ok": false
+  },
+  {
+   "input": "",
+   "ok": false
+  },
+  {
+   "input": "   ",
+   "ok": false
+  },
+  {
+   "input": "Ada‮evol",
+   "ok": false
+  },
+  {
+   "input": "Ada\nLovelace",
+   "ok": false
+  },
+  {
+   "input": "‍‍",
+   "ok": false
+  },
+  {
+   "input": "⠀",
+   "ok": false
+  },
+  {
+   "input": "Ada​L",
+   "ok": false
+  }
+ ],
+ "emails": [
+  {
+   "input": "grace@example.test",
+   "ok": true,
+   "address": "grace@example.test",
+   "key": "grace@example.test"
+  },
+  {
+   "input": "  Grace@Example.TEST ",
+   "ok": true,
+   "address": "Grace@Example.TEST",
+   "key": "grace@example.test"
+  },
+  {
+   "input": "ada+work@example.test",
+   "ok": true,
+   "address": "ada+work@example.test",
+   "key": "ada+work@example.test"
+  },
+  {
+   "input": "a.da@example.test",
+   "ok": true,
+   "address": "a.da@example.test",
+   "key": "a.da@example.test"
+  },
+  {
+   "input": "ada@bücher.example",
+   "ok": true,
+   "address": "ada@bücher.example",
+   "key": "ada@xn--bcher-kva.example"
+  },
+  {
+   "input": "ADA@BÜCHER.EXAMPLE",
+   "ok": true,
+   "address": "ADA@BÜCHER.EXAMPLE",
+   "key": "ada@xn--bcher-kva.example"
+  },
+  {
+   "input": "zoë@example.test",
+   "ok": true,
+   "address": "zoë@example.test",
+   "key": "zoë@example.test"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test",
+   "ok": true,
+   "address": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test",
+   "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test"
+  },
+  {
+   "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@example.test",
+   "ok": false
+  },
+  {
+   "input": "a@dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.dddddddddddddddddddddddddddddddddddddddddddddddddd.test",
+   "ok": false
+  },
+  {
+   "input": "",
+   "ok": false
+  },
+  {
+   "input": "grace",
+   "ok": false
+  },
+  {
+   "input": "grace@",
+   "ok": false
+  },
+  {
+   "input": "@example.test",
+   "ok": false
+  },
+  {
+   "input": "a@b@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace@localhost",
+   "ok": false
+  },
+  {
+   "input": "grace@exa mple.test",
+   "ok": false
+  },
+  {
+   "input": "gr ace@example.test",
+   "ok": false
+  },
+  {
+   "input": "Grace <grace@example.test>",
+   "ok": false
+  },
+  {
+   "input": "<grace@example.test>",
+   "ok": false
+  },
+  {
+   "input": "grace@example.test, ada@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace,ada@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace;ada@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace@example.test;",
+   "ok": false
+  },
+  {
+   "input": "\"grace\"@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace@example..test",
+   "ok": false
+  },
+  {
+   "input": "grace@-example.test",
+   "ok": false
+  },
+  {
+   "input": "grace@example.123",
+   "ok": false
+  },
+  {
+   "input": "gr‮ace@example.test",
+   "ok": false
+  },
+  {
+   "input": "grace@example.test\n",
+   "ok": true,
+   "address": "grace@example.test",
+   "key": "grace@example.test"
+  },
+  {
+   "input": "grace\n@example.test",
+   "ok": false
+  }
+ ]
+}

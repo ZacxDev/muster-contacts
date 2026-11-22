@@ -1,0 +1,51 @@
+# An EXAMPLE tenant overlay: every value a tenant sets, with example.test
+# names. Copy it into your own deployment repository and change the values;
+# do not deploy it as is.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# muster's namespace: the plugin runs in the muster tenant, beside meetings.
+namespace: muster-tenant
+
+resources:
+  - ../kubernetes
+
+images:
+  - name: ghcr.io/zacxdev/muster-contacts
+    # Pin an image ci built from a green commit on main: sha-<short commit>
+    # (or a digest: newTag: main@sha256:<digest>).
+    newTag: sha-0000000
+
+configMapGenerator:
+  - name: muster-contacts-params
+    behavior: merge
+    literals:
+      - muster-url=http://muster.muster-tenant.svc.cluster.local.:8105
+      - cluster-domain=cluster.local
+      - muster-origin=https://muster.example.test
+      - public-url=https://contacts-muster.example.test
+      - meetings-app-id=12
+
+patches:
+  # The PVC's StorageClass.
+  - target: {kind: PersistentVolumeClaim, name: muster-contacts-state}
+    patch: |-
+      - op: add
+        path: /spec/storageClassName
+        value: example-local
+  # The ingress controller's namespace, the meetings plugin's pods, and
+  # muster's pods and port.
+  - target: {kind: NetworkPolicy, name: muster-contacts}
+    patch: |-
+      - op: replace
+        path: /spec/ingress/0/from/0/namespaceSelector/matchLabels
+        value: {kubernetes.io/metadata.name: example-ingress}
+      - op: replace
+        path: /spec/ingress/1/from/0/podSelector/matchLabels
+        value: {app.kubernetes.io/name: muster-meetings}
+      - op: replace
+        path: /spec/egress/0/to/0/podSelector/matchLabels
+        value: {app: muster}
+      - op: replace
+        path: /spec/egress/0/ports/0/port
+        value: 8105

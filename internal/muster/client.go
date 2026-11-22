@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -20,16 +21,13 @@ import (
 // TokenPrefix starts every plugin token.
 const TokenPrefix = "mpl_"
 
-// MaxClaimWait is the longest wait muster takes on a claim (seconds).
-const MaxClaimWait = 25
-
 // Kind classifies a refused or failed call by its HTTP status.
 type Kind string
 
 const (
-	KindAuth        Kind = "auth"         // 401: not a live plugin token (revoked, unknown, owner disabled)
+	KindAuth        Kind = "auth"         // 401: not a live plugin token (uninstalled, rotated away, unknown)
 	KindCapability  Kind = "capability"   // 403: the token lacks the capability the route needs
-	KindOff         Kind = "not_found"    // 404: plugins are off on this server, or no such draft
+	KindOff         Kind = "not_found"    // 404: plugins are off; on a redeem no such code
 	KindBadRequest  Kind = "bad_request"  // 400 (and other 4xx)
 	KindConflict    Kind = "conflict"     // 409
 	KindRateLimited Kind = "rate_limited" // 429: see RetryAfter
@@ -74,11 +72,6 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("muster: %d %s: %s", e.Status, e.Kind, e.Message)
 }
 
-// Retryable says the same call is worth sending again.
-func (e *Error) Retryable() bool {
-	return e.Kind == KindNetwork || e.Kind == KindServer || e.Kind == KindRateLimited
-}
-
 // AsError returns err as an *Error, or nil.
 func AsError(err error) *Error {
 	var e *Error
@@ -88,11 +81,26 @@ func AsError(err error) *Error {
 	return nil
 }
 
+// HTTPAllow names where plain http to muster is allowed, besides a loopback
+// host. Everything else must be https.
+type HTTPAllow struct {
+	// ClusterDomain is the cluster's DNS domain (e.g. "cluster.local"):
+	// http is allowed to a FULLY-QUALIFIED Service name in it, written with
+	// its trailing dot (ClusterFQDN). Empty allows none.
+	ClusterDomain string
+	// Host is ONE operator-named host (e.g. "muster", Compose's service
+	// name) to which http is allowed, matched exactly (case aside): no
+	// wildcard, no suffix. Empty allows none.
+	Host string
+}
+
 // CheckBaseURL validates muster's address: https, except plain http to a
-// loopback host; no user, path, query or fragment (a trailing "/" is fine). A
-// plugin token acts as its owner, so it never crosses a network in clear text,
-// and a token pasted into the URL is refused rather than sent on every call.
-func CheckBaseURL(raw string) (string, error) {
+// loopback host, to a fully-qualified Service name in allow.ClusterDomain,
+// or to exactly allow.Host; no user, path, query or fragment (a trailing "/"
+// is fine). A plugin token can act for people, so it never crosses a network
+// it does not stay inside in clear text, and a token pasted into the URL is
+// refused rather than sent on every call.
+func CheckBaseURL(raw string, allow HTTPAllow) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u.Host == "" {
 		// Never echo the value: a mistaken one may hold the token.
@@ -100,8 +108,9 @@ func CheckBaseURL(raw string) (string, error) {
 	}
 	h := u.Hostname()
 	loopback := h == "localhost" || h == "127.0.0.1" || h == "::1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && loopback) {
-		return "", fmt.Errorf("MUSTER_URL must be https:// (http:// only for localhost, 127.0.0.1 or [::1])")
+	named := allow.Host != "" && strings.EqualFold(h, allow.Host)
+	if u.Scheme != "https" && !(u.Scheme == "http" && (loopback || named || ClusterFQDN(h, allow.ClusterDomain))) {
+		return "", fmt.Errorf("MUSTER_URL must be https:// (http:// only for localhost, 127.0.0.1, [::1], a fully-qualified Service name with its trailing dot such as muster.<namespace>.svc.cluster.local., or the host CONTACTS_MUSTER_HTTP_HOST names)")
 	}
 	if u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
 		return "", fmt.Errorf("MUSTER_URL must carry no user, query or fragment")
@@ -110,6 +119,44 @@ func CheckBaseURL(raw string) (string, error) {
 		return "", fmt.Errorf("MUSTER_URL must be muster's address alone, with no path (e.g. https://muster.example.com)")
 	}
 	return u.Scheme + "://" + u.Host, nil
+}
+
+// clusterLabel is one DNS label.
+var clusterLabel = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// DNSName says s is one or more DNS labels joined by dots, with no trailing
+// dot (case does not matter).
+func DNSName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, l := range strings.Split(strings.ToLower(s), ".") {
+		if !clusterLabel.MatchString(l) {
+			return false
+		}
+	}
+	return true
+}
+
+// ClusterFQDN says host is a fully-qualified Kubernetes Service name,
+// exactly `<service>.<namespace>.svc.<clusterDomain>.`, WITH the trailing
+// dot (case does not matter). Only the trailing dot makes the name
+// absolute: without it, a resolver with ndots:5 (the pod default) tries the
+// node's search domains first, and a wildcard record in one of them would
+// receive the call, token and all, over cleartext http. So the short forms
+// (`muster.ns.svc`), the dotless full form, a name with more or fewer labels
+// before ".svc", and any other domain are refused.
+func ClusterFQDN(host, clusterDomain string) bool {
+	if !DNSName(clusterDomain) {
+		return false
+	}
+	h := strings.ToLower(host)
+	suffix := ".svc." + strings.ToLower(clusterDomain) + "."
+	if !strings.HasSuffix(h, suffix) {
+		return false
+	}
+	labels := strings.Split(strings.TrimSuffix(h, suffix), ".")
+	return len(labels) == 2 && DNSName(labels[0]) && DNSName(labels[1])
 }
 
 // Redact is a URL cut to its scheme and host, for a log line or an error: a
@@ -127,8 +174,7 @@ func Redact(raw string) string {
 type Client struct {
 	base  string
 	token string
-	// HTTP is used for every call but the claim; Claim makes its own timeout
-	// of wait + 10 s (docs/plugins.md, "At most once").
+	// HTTP is used for every call.
 	HTTP *http.Client
 }
 
@@ -140,103 +186,171 @@ func New(base, token string) (*Client, error) {
 	return &Client{base: base, token: token, HTTP: &http.Client{Timeout: 30 * time.Second}}, nil
 }
 
-// SelfInfo is GET /plugin/v1/self's answer.
+// ScopeServer is the scope of a server-installed app: an admin installed it
+// once for the whole server on muster's /admin/apps, and its one token acts
+// as nobody until a person's own hand-off names them (design: "Core seam:
+// server-installed app plugins").
+const ScopeServer = "server"
+
+// SelfInfo is GET /plugin/v1/self's answer. For a server token it names no
+// person: owner_id and owner_login are null, so this struct does not even
+// have fields for them, and nothing the plugin decodes from /self can carry
+// a muster user id or an email into its database.
 type SelfInfo struct {
 	PluginID     int64    `json:"plugin_id"`
 	PluginName   string   `json:"plugin_name"`
-	OwnerID      int64    `json:"owner_id"`
-	OwnerLogin   string   `json:"owner_login"`
-	OwnerKind    string   `json:"owner_kind"`
+	Scope        string   `json:"scope"`      // "server" for a server-installed app
+	OwnerKind    string   `json:"owner_kind"` // "server" for a server-installed app
 	Capabilities []string `json:"capabilities"`
-	DeliverTo    *string  `json:"deliver_to"`
+	ActForHours  int      `json:"act_for_hours"`
 }
 
-// Message is POST /plugin/v1/messages' body (the fields this template uses).
-type Message struct {
-	ExternalID     string     `json:"external_id"`
-	Sender         string     `json:"sender,omitempty"`
-	Subject        string     `json:"subject,omitempty"`
-	Body           string     `json:"body"`
-	ReceivedAt     *time.Time `json:"received_at,omitempty"`
-	NoReply        bool       `json:"no_reply"`
-	SenderVerified bool       `json:"sender_verified"`
+// AppTarget is an app tab's hand-off target: {"app": {}}, or {"app": {"ref":
+// "<ref>"}} when muster's page was opened with ?ref=. muster passes Ref
+// through without reading it; it is a hint, never an authority.
+type AppTarget struct {
+	Ref string `json:"ref,omitempty"`
 }
 
-// MessageAck is the answer to a message: Created is true on 202 (stored now),
-// false on 200 (a repeat of this external_id: nothing new).
-type MessageAck struct {
-	ID      int64  `json:"id"`
-	Status  string `json:"status"`
-	Created bool   `json:"-"`
+// HandoffTarget is what a hand-off code was minted for. muster sets exactly
+// one of the two; Mirror is kept raw because an app plugin never accepts it.
+type HandoffTarget struct {
+	App    *AppTarget      `json:"app,omitempty"`
+	Mirror json.RawMessage `json:"mirror,omitempty"`
 }
 
-// Claim is one approved draft, leased to this plugin for 2 minutes.
-type Claim struct {
-	DraftID           int64     `json:"draft_id"`
-	Kind              string    `json:"kind"`
-	MessageExternalID string    `json:"message_external_id"`
-	Body              string    `json:"body"`
-	ApprovedAt        time.Time `json:"approved_at"`
+// RedeemedOwner is the person a server app's hand-off names: a pairwise
+// subject (random, 128 bits, different under every server app, stable for
+// the install) and the account's display name ("" when it has none). Never
+// a muster user id and never an email (design: fork 2).
+type RedeemedOwner struct {
+	Subject     string `json:"subject"`
+	DisplayName string `json:"display_name"`
 }
 
-// Result is POST /plugin/v1/drafts/{id}/result's body.
-type Result struct {
-	OK          bool   `json:"ok"`
-	ExternalRef string `json:"external_ref,omitempty"`
-	Detail      string `json:"detail,omitempty"`
+// Redeemed is POST /plugin/v1/handoffs/redeem's answer to a server token.
+// It has no field for a user id or an email: an answer that carried one
+// anyway would be dropped by the decoder, never stored.
+type Redeemed struct {
+	Owner     RedeemedOwner `json:"owner"`
+	Scope     string        `json:"scope"`
+	Target    HandoffTarget `json:"target"`
+	Purpose   string        `json:"purpose"`
+	SteppedUp bool          `json:"stepped_up"`
+	MintedAt  time.Time     `json:"minted_at"`
+	ActUntil  time.Time     `json:"act_until"`
 }
 
-// ResultAck is the recorded result: status "sent" or "failed".
-type ResultAck struct {
-	DraftID int64  `json:"draft_id"`
-	Status  string `json:"status"`
+// Redeem is POST /plugin/v1/handoffs/redeem: it spends a hand-off code once.
+// muster answers one 404 (KindOff) for a code that is unknown, spent,
+// expired, another app's, or whose person was hidden, disabled or signed out
+// everywhere since the mint. The caller must still check the purpose, the
+// target and the scope.
+func (c *Client) Redeem(ctx context.Context, code string) (Redeemed, error) {
+	var out Redeemed
+	_, err := c.do(ctx, http.MethodPost, "/plugin/v1/handoffs/redeem", nil, map[string]string{"code": code}, &out)
+	return out, err
 }
 
 // Self is GET /plugin/v1/self.
 func (c *Client) Self(ctx context.Context) (SelfInfo, error) {
 	var out SelfInfo
-	_, err := c.do(ctx, c.HTTP, http.MethodGet, "/plugin/v1/self", nil, &out)
+	_, err := c.do(ctx, http.MethodGet, "/plugin/v1/self", nil, nil, &out)
 	return out, err
 }
 
-// PostMessage is POST /plugin/v1/messages. Send the same message again when
-// no answer arrived: a repeat is answered 200 and stored once.
-func (c *Client) PostMessage(ctx context.Context, m Message) (MessageAck, error) {
-	var out MessageAck
-	status, err := c.do(ctx, c.HTTP, http.MethodPost, "/plugin/v1/messages", m, &out)
-	out.Created = status == http.StatusAccepted
-	return out, err
+// MaxCheckSubjects is the most subjects one POST /plugin/v1/owners/check
+// takes; OwnersCheck sends more in batches of this size.
+const MaxCheckSubjects = 200
+
+var subjectRE = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+
+// ValidSubject is a subject's shape: 22 base64url characters, 128 bits.
+func ValidSubject(s string) bool { return subjectRE.MatchString(s) }
+
+// ErrBadSubject is an owners/check for a value that is not a subject's
+// shape (empty, say). It is refused before anything is sent.
+var ErrBadSubject = errors.New("muster: not a subject (22 base64url characters)")
+
+// The states owners/check answers a subject with.
+const (
+	// StateLive: the app may act for the person.
+	StateLive = "live"
+	// StateExpired: the person's 8 hours since they last opened the tab ran
+	// out, and nothing else ended it. Their owner sessions end; contacts
+	// still accepts cards for them (it is the normal state).
+	StateExpired = "expired"
+	// StateRevoked: the person hid the app, was disabled, or signed out
+	// everywhere. Their sessions end and contacts refuses writes for them.
+	StateRevoked = "revoked"
+)
+
+// OwnersCheck is POST /plugin/v1/owners/check: the state of each subject's
+// grant, {"states": {"<subject>": "live"|"expired"|"revoked"}}, sent in
+// batches of MaxCheckSubjects.
+//
+// 🔴 Within an answered batch it fails closed: a subject asked about but
+// absent from "states", or answered with any other state, is StateRevoked,
+// and a subject the answer names but that was not asked is dropped.
+//
+// A batch that is not answered is left out of the map entirely, and so
+// decides nothing: a refusal, a 5xx, no answer, or a 2xx with no "states"
+// object (the old {"live": [...]} shape, an empty body, {} or {"states":
+// null}), which is KindProtocol and never "everyone revoked". The batches
+// that were answered are still returned, with an error naming each failed
+// one. A 401 stops at once and returns it.
+func (c *Client) OwnersCheck(ctx context.Context, subjects []string) (map[string]string, error) {
+	for _, s := range subjects {
+		if !ValidSubject(s) {
+			return nil, ErrBadSubject
+		}
+	}
+	states := make(map[string]string, len(subjects))
+	var first *Error
+	var failed []string
+	n := (len(subjects) + MaxCheckSubjects - 1) / MaxCheckSubjects
+	for i, b := 0, 1; i < len(subjects); i, b = i+MaxCheckSubjects, b+1 {
+		batch := subjects[i:min(i+MaxCheckSubjects, len(subjects))]
+		var out struct {
+			States *map[string]string `json:"states"`
+		}
+		st, err := c.do(ctx, http.MethodPost, "/plugin/v1/owners/check", nil, map[string]any{"subjects": batch}, &out)
+		if err == nil && out.States == nil {
+			err = &Error{Kind: KindProtocol, Status: st, Message: `owners/check answered no "states" object`}
+		}
+		if e := AsError(err); e != nil && e.Kind == KindAuth {
+			return states, err
+		}
+		if err != nil {
+			e := AsError(err)
+			if e == nil {
+				e = &Error{Kind: KindProtocol, Message: err.Error()}
+			}
+			if first == nil {
+				first = e
+			}
+			failed = append(failed, fmt.Sprintf("batch %d of %d (%d subjects): %v", b, n, len(batch), e))
+			continue
+		}
+		for _, s := range batch {
+			st := (*out.States)[s]
+			switch st {
+			case StateLive, StateExpired:
+			default:
+				st = StateRevoked
+			}
+			states[s] = st
+		}
+	}
+	if first != nil {
+		e := *first
+		e.Message = strings.Join(failed, "; ")
+		return states, &e
+	}
+	return states, nil
 }
 
-// Claim is POST /plugin/v1/drafts/claim: it waits up to wait seconds (0–25)
-// for an approved draft. nil, nil means none arrived (204).
-func (c *Client) Claim(ctx context.Context, wait int) (*Claim, error) {
-	wait = min(max(wait, 0), MaxClaimWait)
-	hc := *c.HTTP
-	hc.Timeout = time.Duration(wait+10) * time.Second
-	var out Claim
-	status, err := c.do(ctx, &hc, http.MethodPost, "/plugin/v1/drafts/claim", map[string]int{"wait_seconds": wait}, &out)
-	if err != nil {
-		return nil, err
-	}
-	if status == http.StatusNoContent {
-		return nil, nil
-	}
-	if out.DraftID <= 0 {
-		return nil, &Error{Kind: KindProtocol, Status: status, Message: "claim answered without a draft_id"}
-	}
-	return &out, nil
-}
-
-// Result is POST /plugin/v1/drafts/{id}/result. A repeat of the same result is
-// safe (200, nothing changes).
-func (c *Client) Result(ctx context.Context, draftID int64, r Result) (ResultAck, error) {
-	var out ResultAck
-	_, err := c.do(ctx, c.HTTP, http.MethodPost, "/plugin/v1/drafts/"+strconv.FormatInt(draftID, 10)+"/result", r, &out)
-	return out, err
-}
-
-func (c *Client) do(ctx context.Context, hc *http.Client, method, path string, in, out any) (int, error) {
+func (c *Client) do(ctx context.Context, method, path string, hdr http.Header, in, out any) (int, error) {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -249,11 +363,14 @@ func (c *Client) do(ctx context.Context, hc *http.Client, method, path string, i
 	if err != nil {
 		return 0, err
 	}
+	for k, v := range hdr {
+		req.Header[k] = v
+	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := hc.Do(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		// net/http's error names the whole request URL; keep its scheme and
 		// host only, so a base that slipped past CheckBaseURL with a token in
