@@ -355,7 +355,7 @@ func TestMustersWordOnAPersonReachesTheAPI(t *testing.T) {
 	e.fake.Show(app.PluginID, ada.ID)
 	e.app.PollOnce(bg)
 	if got := standing(); got != 200 {
-		t.Fatalf("after Show and a poll, owners = %d, want 200", got)
+		t.Fatalf("expired accepted: after Show and a poll (the grant is expired: Hide ended its clock), owners = %d, want 200", got)
 	}
 	resp, body := e.apiDo("POST", "/v1/receipts/check", map[string]any{"owner": s, "receipt": receipt})
 	if resp.StatusCode != 200 || !strings.Contains(string(body), `"known":false`) {
