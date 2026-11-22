@@ -204,8 +204,8 @@ var mutants = []mutant{
 	{name: "accepting: switch: ignore Add people from Meetings off", file: st,
 		from: "st.Accepting = !st.Revoked && st.Collect", to: "st.Accepting = !st.Revoked",
 		pkg: "./internal/store", test: "TestAccepting", want: "accepting switch"},
-	{name: "expired accepted: refuse writes for expired", file: st,
-		from: "ms(now), jsonStrings(revoked), ms(asOf))", to: "ms(now), jsonStrings(append(revoked, expired...)), ms(asOf))",
+	{name: "expired accepted: refuse writes for expired", file: own,
+		from: "\t\t\tcase muster.StateExpired:\n\t\t\t\texpired = append(expired, s)", to: "\t\t\tcase muster.StateExpired:\n\t\t\t\trevoked = append(revoked, s)",
 		pkg: "./internal/server", test: "TestMustersWordOnAPersonReachesTheAPI", want: "expired accepted"},
 	{name: "decision 8: refuse a person who never opened Contacts", file: st,
 		from: "return Standing{Collect: true, Accepting: true}, nil", to: "return Standing{Collect: true, Accepting: false}, nil",
@@ -216,14 +216,14 @@ var mutants = []mutant{
 
 	// ---- the API's door ----
 	{name: "API auth: accept any bearer", file: api,
-		from: `if s.cfg.APIToken == "" || subtle.ConstantTimeCompare(got, want) != 1 {`, to: `if s.cfg.APIToken == "" {`,
+		from: `if s.cfg.APIToken == "" || subtle.ConstantTimeCompare(got, want) != 1 {`, to: `if s.cfg.APIToken == "" || (len(got) < 0 && subtle.ConstantTimeCompare(got, want) != 1) {`,
 		pkg: "./internal/server", test: "TestTheContract", want: "auth:_wrong_token_is_401"},
 	{name: "API auth: compare a prefix", file: api,
-		from: `if s.cfg.APIToken == "" || subtle.ConstantTimeCompare(got, want) != 1 {`, to: `if s.cfg.APIToken == "" || !bytes.HasPrefix(got, want) {`,
+		from: `if s.cfg.APIToken == "" || subtle.ConstantTimeCompare(got, want) != 1 {`, to: `if s.cfg.APIToken == "" || (!bytes.HasPrefix(got, want) && subtle.ConstantTimeCompare(got, want) != 1) {`,
 		pkg: "./internal/server", test: "TestTheContract", want: "auth:_extended_token_is_401"},
 	{name: "token check: the API token may be the muster token", file: mainGo,
 		from: "case c.APIToken == c.Token || strings.HasPrefix(c.APIToken, muster.TokenPrefix):", to: "case false:",
-		pkg: ".", test: "TestTheAPITokenIsCheckedAtBoot", want: "the muster token:"},
+		pkg: ".", test: "TestTheAPITokenIsCheckedAtBoot", want: "another muster token:"},
 	{name: "token check: a short API token is accepted", file: mainGo,
 		from: "case len(c.APIToken) < MinAPITokenBytes:", to: "case false:",
 		pkg: ".", test: "TestTheAPITokenIsCheckedAtBoot", want: "short:"},
@@ -254,7 +254,7 @@ var mutants = []mutant{
 	{name: "redeem: accept any purpose", file: srv, from: `if red.Purpose != "app" {`, to: `if false {`,
 		pkg: "./internal/server", test: "TestEnterRefusesAnythingButAServerAppCodeNamingASubject", want: "purpose view: enter = 200"},
 	{name: "redeem: pass another person's ref to the page", file: srv,
-		from: "if _, err := o.Get(r.Context(), red.Target.App.Ref); err == nil {", to: "if true {",
+		from: "if _, err := o.Get(r.Context(), red.Target.App.Ref); err == nil {", to: "if _, err := o.Get(r.Context(), red.Target.App.Ref); err == nil || true {",
 		pkg: "./internal/server", test: "TestEnterHeadersAndRef", want: "another person's ref must not"},
 
 	// ---- versioned assets ----
