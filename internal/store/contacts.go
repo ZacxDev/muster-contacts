@@ -327,6 +327,11 @@ func (o *Owner) Update(ctx context.Context, id string, p ContactPatch, now time.
 	if err := tx.Commit(); err != nil {
 		return Contact{}, err
 	}
+	// An edit can drop an email and a merge deletes a contact: write the
+	// old pages out of the WAL (secure_delete zeroed them in the file).
+	if err := o.s.checkpoint(ctx); err != nil {
+		return Contact{}, err
+	}
 	return o.Get(ctx, id)
 }
 
@@ -392,6 +397,9 @@ func (o *Owner) Delete(ctx context.Context, id string, now time.Time) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := o.tombstone(ctx, tx, `UPDATE idempotency SET request_sha256 = '', contact_id = NULL WHERE contact_id = ? AND owner = ?`, id, o.subject); err != nil {
+		return err
+	}
 	r, err := tx.ExecContext(ctx, `DELETE FROM contacts WHERE id = ? AND owner = ?`, id, o.subject)
 	if err != nil {
 		return err
@@ -409,6 +417,15 @@ func (o *Owner) Delete(ctx context.Context, id string, now time.Time) error {
 		return err
 	}
 	return o.s.checkpoint(ctx)
+}
+
+// tombstone turns the card keys a delete is about to orphan into
+// tombstones: the key stays (so meetings' outbox retrying the same card
+// within its 72 hours makes nothing again), and its body's hash and its
+// contact go, so the row holds nothing of the person.
+func (o *Owner) tombstone(ctx context.Context, tx *sql.Tx, q string, args ...any) error {
+	_, err := tx.ExecContext(ctx, q, args...)
+	return err
 }
 
 // dropOrphanMeetings deletes this owner's meeting rows that no contact is
@@ -429,10 +446,12 @@ func (o *Owner) DeleteAll(ctx context.Context, now time.Time) error {
 		return err
 	}
 	defer tx.Rollback()
+	if err := o.tombstone(ctx, tx, `UPDATE idempotency SET request_sha256 = '', contact_id = NULL WHERE owner = ?`, o.subject); err != nil {
+		return err
+	}
 	for _, q := range []string{
 		`DELETE FROM contacts WHERE owner = ?`,
 		`DELETE FROM meetings WHERE owner = ?`,
-		`DELETE FROM idempotency WHERE owner = ?`,
 		`DELETE FROM audit WHERE owner = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, o.subject); err != nil {
@@ -499,6 +518,11 @@ func (o *Owner) Merge(ctx context.Context, keep, from string, now time.Time) (Co
 		return Contact{}, err
 	}
 	if err := tx.Commit(); err != nil {
+		return Contact{}, err
+	}
+	// An edit can drop an email and a merge deletes a contact: write the
+	// old pages out of the WAL (secure_delete zeroed them in the file).
+	if err := o.s.checkpoint(ctx); err != nil {
 		return Contact{}, err
 	}
 	return o.Get(ctx, keep)

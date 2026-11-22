@@ -35,6 +35,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -67,8 +68,26 @@ type Config struct {
 	StateDir       string
 }
 
-// MinAPITokenBytes is the shortest CONTACTS_API_TOKEN accepted.
-const MinAPITokenBytes = 32
+// MinAPITokenBytes is the shortest CONTACTS_API_TOKEN accepted, and
+// MinAPITokenDistinct the fewest distinct bytes in it: 32 random bytes in
+// base64 (43 characters) hold about 30; a typed or repeated value far fewer.
+const (
+	MinAPITokenBytes    = 32
+	MinAPITokenDistinct = 16
+)
+
+// placeholderAPITokens are .env.example's value, now and before: refused by
+// name, so a copied example never boots (today's is also under 32 bytes).
+var placeholderAPITokens = []string{"replace-me", "replace-me-with-openssl-rand-base64-32"}
+
+// distinctBytes counts the different bytes in s.
+func distinctBytes(s string) int {
+	seen := map[byte]bool{}
+	for i := 0; i < len(s); i++ {
+		seen[s[i]] = true
+	}
+	return len(seen)
+}
 
 // LoadConfig reads and checks the environment through getenv. 🔴 It never
 // echoes a token's value in an error.
@@ -109,10 +128,14 @@ func LoadConfig(getenv func(string) string) (Config, error) {
 	switch {
 	case c.APIToken == "":
 		return Config{}, errors.New("CONTACTS_API_TOKEN is not set: 32 or more random bytes (openssl rand -base64 32), the same value as meetings' MEETINGS_CONTACTS_TOKEN")
+	case slices.Contains(placeholderAPITokens, c.APIToken):
+		return Config{}, errors.New("CONTACTS_API_TOKEN is the .env.example placeholder: use openssl rand -base64 32")
 	case c.APIToken == c.Token || strings.HasPrefix(c.APIToken, muster.TokenPrefix):
 		return Config{}, errors.New("CONTACTS_API_TOKEN is a muster plugin token (its value is not shown): it is a separate secret that muster never sees")
 	case len(c.APIToken) < MinAPITokenBytes:
 		return Config{}, fmt.Errorf("CONTACTS_API_TOKEN is shorter than %d bytes (its value is not shown): use openssl rand -base64 32", MinAPITokenBytes)
+	case distinctBytes(c.APIToken) < MinAPITokenDistinct:
+		return Config{}, fmt.Errorf("CONTACTS_API_TOKEN has fewer than %d distinct characters: it is not random (its value is not shown): use openssl rand -base64 32", MinAPITokenDistinct)
 	}
 	if v := strings.TrimSpace(getenv("CONTACTS_MEETINGS_APP_ID")); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)

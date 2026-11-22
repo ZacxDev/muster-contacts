@@ -57,6 +57,12 @@ func (o *Owner) remembered(ctx context.Context, tx *sql.Tx, key, hash string) (b
 	if err != nil {
 		return false, 0, contact, err
 	}
+	if h == "" {
+		// A tombstone: the contact this card made was deleted. A retry is
+		// answered as a replay, and makes nothing (whatever its body: the
+		// body's hash went with the contact).
+		return true, status, sql.NullString{}, nil
+	}
 	if h != hash {
 		return false, 0, contact, ErrKeyReused
 	}

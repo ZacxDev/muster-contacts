@@ -25,7 +25,8 @@ import (
 // ownerlessStatements are the statements allowed to touch a person table
 // without an owner filter, each by a prefix, with why.
 var ownerlessStatements = map[string]string{
-	"DELETE FROM idempotency WHERE at <= ?": "the sweep: every owner's keys past their lifetime",
+	"DELETE FROM idempotency WHERE at <= ?":                         "the sweep: every owner's keys past their lifetime",
+	"DELETE FROM idempotency WHERE request_sha256 = '' AND at <= ?": "the sweep: every owner's tombstones past the outbox's 72 hours",
 }
 
 var (

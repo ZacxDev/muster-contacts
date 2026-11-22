@@ -41,6 +41,11 @@ const SessionLifetime = 8 * time.Hour
 // IdempotencyLifetime is how long an API write's key is kept (design: 7 days).
 const IdempotencyLifetime = 7 * 24 * time.Hour
 
+// TombstoneLifetime is how long a deleted contact's card keys are kept as
+// tombstones: meetings' outbox retries a card for at most 72 hours, so until
+// then a retry must not make the deleted contact again.
+const TombstoneLifetime = 72 * time.Hour
+
 // ErrNotFound is a row that does not exist or is not this owner's: the two
 // are one error, so no caller can tell them apart.
 var ErrNotFound = errors.New("not found")
@@ -140,7 +145,7 @@ var migrations = []string{
 	CREATE TABLE idempotency (
 		owner          TEXT    NOT NULL,
 		key            TEXT    NOT NULL,                         -- 'card:<card id>'
-		request_sha256 TEXT    NOT NULL,
+		request_sha256 TEXT    NOT NULL,                         -- '' for a tombstone: the key of a card whose contact was deleted
 		status         INTEGER NOT NULL,                         -- the answer's status; never its body
 		contact_id     TEXT,
 		at             INTEGER NOT NULL,
@@ -194,6 +199,12 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// A delete whose checkpoint never ran (the process stopped first) leaves
+	// old pages in the WAL: write them back before serving anyone.
+	if err := s.checkpoint(context.Background()); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -233,9 +244,12 @@ func (s *Store) migrate() error {
 
 // checkpoint writes the WAL back into the database file and truncates it,
 // so the zeroed pages secure_delete left are what is on disk (and the
-// deleted rows' old page images in the WAL are gone).
+// deleted rows' old page images in the WAL are gone). 🔴 It runs on its
+// caller's context WITHOUT its cancellation: after a delete has committed,
+// a client that went away (or a SIGTERM) must not stop the bytes leaving
+// the file.
 func (s *Store) checkpoint(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `PRAGMA wal_checkpoint(TRUNCATE)`)
+	_, err := s.db.ExecContext(context.WithoutCancel(ctx), `PRAGMA wal_checkpoint(TRUNCATE)`)
 	return err
 }
 
@@ -465,7 +479,14 @@ func (s *Store) Sweep(ctx context.Context, now time.Time) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM idempotency WHERE at <= ?`, ms(now.Add(-IdempotencyLifetime))); err != nil {
 		return err
 	}
-	return tx.Commit()
+	// Tombstones of every owner past the outbox's 72 hours.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM idempotency WHERE request_sha256 = '' AND at <= ?`, ms(now.Add(-TombstoneLifetime))); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return s.checkpoint(ctx)
 }
 
 // Ping checks the database answers.

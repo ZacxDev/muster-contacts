@@ -394,7 +394,12 @@ func TestDeleteEverything(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tb := range PersonTables {
-		if n := count(t, s, `SELECT count(*) FROM `+tb+` WHERE owner = ?`, ownerA); n != 0 {
+		q := `SELECT count(*) FROM ` + tb + ` WHERE owner = ?`
+		if tb == "idempotency" {
+			// Only tombstones stay: a key, no body hash, no contact.
+			q += ` AND (request_sha256 != '' OR contact_id IS NOT NULL)`
+		}
+		if n := count(t, s, q, ownerA); n != 0 {
 			t.Errorf("delete everything: %s still holds %d of the owner's rows", tb, n)
 		}
 		if n := count(t, s, `SELECT count(*) FROM `+tb+` WHERE owner = ?`, ownerB); n != bBefore[tb] {
@@ -621,3 +626,58 @@ func TestListSearchAndPaging(t *testing.T) {
 }
 
 var _ = sql.ErrNoRows
+
+// 🔴 G2: a deleted contact's card key outlives the contact as a tombstone
+// (the key alone: no body hash, no contact), so meetings' outbox retrying
+// the same card within its 72 hours makes nothing again, with the same
+// answer; after the 72 hours the sweep drops it.
+func TestADeletedContactIsNotMadeAgainByARetry(t *testing.T) {
+	for _, how := range []string{"delete", "delete everything"} {
+		t.Run(how, func(t *testing.T) {
+			s := open(t)
+			o := view(t, s, ownerA)
+			c := card(t, "kRetry", "Grace", "grace.retry@example.test", "m1", "p1")
+			first := submit(t, o, c)
+			if how == "delete" {
+				if err := o.Delete(ctx, first.ContactID, t0); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := o.DeleteAll(ctx, t0); err != nil {
+				t.Fatal(err)
+			}
+			var hash string
+			var contact any
+			if err := s.db.QueryRow(`SELECT request_sha256, contact_id FROM idempotency WHERE owner = ? AND key = ?`, ownerA, c.Key).Scan(&hash, &contact); err != nil {
+				t.Fatalf("tombstone: the card's key went with the contact: %v", err)
+			}
+			if hash != "" || contact != nil {
+				t.Fatalf("tombstone: the kept key holds hash %q, contact %v: want neither", hash, contact)
+			}
+			again := submit(t, o, c)
+			other := c
+			other.RequestHash = "a retry whose body differs"
+			changed := submit(t, o, other)
+			for _, r := range []CardResult{again, changed} {
+				if r.Outcome != CardReplayed || r.ContactID != "" {
+					t.Fatalf("tombstone: a retry after the delete: %+v, want a replay that makes nothing", r)
+				}
+			}
+			if n := count(t, s, `SELECT count(*) FROM contacts WHERE owner = ?`, ownerA); n != 0 {
+				t.Fatalf("tombstone: a retry after the delete made the contact again (%d contacts)", n)
+			}
+			// The sweep keeps it until the 72 hours pass, then drops it.
+			if err := s.Sweep(ctx, t0.Add(TombstoneLifetime-time.Minute)); err != nil {
+				t.Fatal(err)
+			}
+			if n := count(t, s, `SELECT count(*) FROM idempotency WHERE owner = ?`, ownerA); n != 1 {
+				t.Fatalf("the sweep dropped the tombstone early: %d rows", n)
+			}
+			if err := s.Sweep(ctx, t0.Add(TombstoneLifetime)); err != nil {
+				t.Fatal(err)
+			}
+			if n := count(t, s, `SELECT count(*) FROM idempotency WHERE owner = ?`, ownerA); n != 0 {
+				t.Fatalf("the sweep kept the tombstone past 72 hours: %d rows", n)
+			}
+		})
+	}
+}
