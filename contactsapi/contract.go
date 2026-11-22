@@ -54,17 +54,14 @@ const (
 //
 // Strings in Path, Key and Body may hold placeholders: {owner} and {owner2}
 // (two random subjects, fresh per case), {card} and {card2} (two random
-// card ids), {t1} and {t2} (an hour ago and now, RFC 3339), and any name an
-// earlier step captured. RawBody "$big" is a body over MaxBody. Auth is how
+// card ids), and {t1} and {t2} (an hour ago and now, RFC 3339). RawBody "$big" is a body over MaxBody. Auth is how
 // the request authenticates: "" (the token), "none", "wrong" (another
 // 43-character token), "prefix" (the token less its last character),
 // "extended" (the token and one more), "scheme" (the token as Basic).
 //
 // Expect is the answer's JSON, compared exactly, except that a string
-// "$receipt" or "$contact_ref" matches that value's shape and "$any"
-// anything; a nil Expect is an empty body (204). Headers must be present
-// on the answer ("$int" matches a positive integer). Capture names a
-// top-level string of the answer to keep for later steps.
+// "$any" matches anything; a nil Expect is an empty body (a card's 202).
+// Headers must be present on the answer ("$int" matches a positive integer).
 type Step struct {
 	Method  string            `json:"method"`
 	Path    string            `json:"path"`
@@ -75,7 +72,6 @@ type Step struct {
 	Status  int               `json:"status"`
 	Expect  json.RawMessage   `json:"expect"`
 	Headers map[string]string `json:"headers,omitempty"`
-	Capture map[string]string `json:"capture,omitempty"`
 }
 
 // Fields is fields.json: the card's two fields' rules.
@@ -249,14 +245,6 @@ func runCase(t *testing.T, target Target, cs Case, ran *int) {
 		if msg := match(want, got, "$"); msg != "" {
 			t.Fatalf("%s: answer %s: %s", where, raw, msg)
 		}
-		for name, field := range st.Capture {
-			m, _ := got.(map[string]any)
-			v, ok := m[field].(string)
-			if !ok {
-				t.Fatalf("%s: no string %q to capture in %s", where, field, raw)
-			}
-			vars[name] = v
-		}
 	}
 }
 
@@ -264,9 +252,7 @@ var (
 	positiveInt  = regexp.MustCompile(`^[1-9][0-9]*$`)
 	placeholder  = regexp.MustCompile(`\{([a-z0-9_]+)\}`)
 	shapeMatcher = map[string]*regexp.Regexp{
-		"$receipt":     regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`),
-		"$contact_ref": regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`),
-		"$any":         regexp.MustCompile(``),
+		"$any": regexp.MustCompile(``),
 	}
 )
 

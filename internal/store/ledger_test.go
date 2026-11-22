@@ -137,8 +137,8 @@ func TestTheSQLLedgerSeesAnUnscopedStatement(t *testing.T) {
 		`SELECT name FROM contacts WHERE id = ? AND owner = ?`:                                                                         false,
 		`SELECT x.contact_id FROM contact_emails x JOIN contacts c ON c.id = x.contact_id WHERE x.owner = ?`:                           true,
 		`SELECT x.contact_id FROM contact_emails x JOIN contacts c ON c.owner = ? AND c.id = x.contact_id WHERE x.owner = ?`:           false,
-		`INSERT INTO receipts (receipt_sha256, contact_id, created_at) VALUES (?, ?, ?)`:                                               true,
-		`INSERT INTO receipts (receipt_sha256, owner, contact_id, created_at) VALUES (?, ?, ?, ?)`:                                     false,
+		`INSERT INTO provenance (contact_id, kind, at) VALUES (?, ?, ?)`:                                                               true,
+		`INSERT INTO provenance (contact_id, owner, kind, at) VALUES (?, ?, ?, ?)`:                                                     false,
 		`DELETE FROM meetings WHERE owner = ? AND NOT EXISTS (SELECT 1 FROM meeting_links l WHERE l.meeting_id = meetings.meeting_id)`: true,
 	} {
 		if got := unscoped(stmt) != ""; got != bad {

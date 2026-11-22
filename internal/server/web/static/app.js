@@ -111,10 +111,6 @@
       x.classList.add('origin');
       if (c.origin_title) x.setAttribute('title', c.origin_title);
       b.appendChild(x);
-    } else if (c.origin === 'invited') {
-      var y = chip('mc-envelope', 'Invited');
-      y.classList.add('origin');
-      b.appendChild(y);
     }
     b.addEventListener('click', function () { openContact(c.id); });
     li.appendChild(b);
@@ -149,14 +145,13 @@
 
   function originLine(p) {
     var li = el('li', 'line origin-line');
-    var icons = { owner_entered: 'mc-person', self_submitted: 'send', invited: 'mc-envelope', merged: 'send' };
+    var icons = { owner_entered: 'mc-person', self_submitted: 'send', merged: 'send' };
     li.appendChild(UI.icon(p.meeting_id || p.kind !== 'merged' ? icons[p.kind] : 'mc-person'));
     var t = p.meeting_title || 'a meeting';
     var text;
     switch (p.kind) {
       case 'owner_entered': text = 'Added by you'; break;
       case 'self_submitted': text = 'Added by them after ' + t; break;
-      case 'invited': text = 'Invited to ' + t; break;
       default: // merged
         text = p.meeting_id ? 'Also sent their details after ' + t : 'Merged with ' + (p.said_name || 'another contact');
         if (p.meeting_id && p.said_name) text += ' · they said “' + p.said_name + '”';
@@ -176,8 +171,7 @@
       body.rel = 'noopener';
     }
     body.appendChild(el('span', 'line__title', m.title || 'Meeting'));
-    var meta = [day(m.started_at || m.at), m.role === 'invitee' ? 'Invited' : 'Guest'].filter(Boolean).join(' · ');
-    body.appendChild(el('span', 'line__meta muted', meta));
+    body.appendChild(el('span', 'line__meta muted', day(m.started_at || m.at)));
     li.appendChild(body);
     if (m.unconfirmed) li.appendChild(chip('warning', 'email not confirmed', 'warning'));
     return li;

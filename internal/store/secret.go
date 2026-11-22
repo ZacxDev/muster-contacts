@@ -8,7 +8,7 @@ import (
 	"regexp"
 )
 
-// The plugin's ids, tokens and receipts, all base64url without padding.
+// The plugin's ids and tokens, all base64url without padding.
 const (
 	// SessionTokenBytes is an owner session's token: 32 bytes, 43
 	// characters after SessionPrefix.
@@ -16,8 +16,6 @@ const (
 	// ContactIDBytes is a contact's id: 128 bits, 22 characters. It is the
 	// contact_ref meetings holds; random, so ids reveal no count.
 	ContactIDBytes = 16
-	// ReceiptBytes is a guest browser's receipt: 32 bytes, 43 characters.
-	ReceiptBytes = 32
 )
 
 // SessionPrefix starts every owner session token ("muster contacts owner").
@@ -44,9 +42,6 @@ func NewSessionToken() string { return SessionPrefix + random(SessionTokenBytes)
 // NewContactID is a fresh contact id.
 func NewContactID() string { return random(ContactIDBytes) }
 
-// NewReceipt is a fresh receipt.
-func NewReceipt() string { return random(ReceiptBytes) }
-
 // ValidSessionToken checks a bearer's shape before it is hashed.
 func ValidSessionToken(s string) bool { return sessionTokenRE.MatchString(s) }
 
@@ -56,7 +51,7 @@ func ValidContactID(s string) bool { return idRE.MatchString(s) }
 // ValidSubject is a muster subject's shape: 22 base64url characters.
 func ValidSubject(s string) bool { return idRE.MatchString(s) }
 
-// Hash is the stored form of a token or a receipt: hex SHA-256.
+// Hash is the stored form of a token: hex SHA-256.
 func Hash(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])

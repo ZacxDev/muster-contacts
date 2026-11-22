@@ -203,15 +203,13 @@ func cardID(seed string) string {
 	return s[:43]
 }
 
-// submit sends a card and answers the receipt.
-func (e *env) submit(owner, id, name, email, meetingID, participantID string) string {
+// submit sends a card: 202, no body.
+func (e *env) submit(owner, id, name, email, meetingID, participantID string) {
 	e.t.Helper()
 	resp, body := e.apiDo("POST", "/v1/submissions", cardBody(owner, id, name, email, meetingID, participantID), "Idempotency-Key", "card:"+id)
-	var out struct{ Receipt string }
-	if resp.StatusCode != 202 || json.Unmarshal(body, &out) != nil {
-		e.t.Fatalf("submission = %d: %s", resp.StatusCode, body)
+	if resp.StatusCode != 202 || len(body) != 0 {
+		e.t.Fatalf("submission = %d: %q, want 202 and no body", resp.StatusCode, body)
 	}
-	return out.Receipt
 }
 
 func decode[T any](t *testing.T, raw []byte) T {

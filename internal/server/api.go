@@ -39,8 +39,6 @@ func (s *Server) Internal() http.Handler {
 	})
 	mux.HandleFunc("GET "+contactsapi.RouteOwner+"{owner}", s.apiAuth(s.handleOwnerStanding))
 	mux.HandleFunc("POST "+contactsapi.RouteSubmissions, s.apiAuth(s.handleSubmission))
-	mux.HandleFunc("POST "+contactsapi.RouteReceiptsCheck, s.apiAuth(s.handleReceiptCheck))
-	mux.HandleFunc("POST "+contactsapi.RouteAttendance, s.apiAuth(s.handleAttendance))
 	mux.HandleFunc("/v1/", s.apiAuth(func(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, http.StatusNotFound, contactsapi.ErrNotFoundRoute)
 	}))
@@ -146,10 +144,10 @@ func (e errTooMany) Error() string { return "too many cards" }
 
 // handleSubmission is POST /v1/submissions: a guest's card.
 //
-// 🔴 It answers 202 {"receipt"} the same whether the card made a contact,
+// 🔴 It answers 202 with no body the same whether the card made a contact,
 // merged into one, or was dropped because the owner is not accepting (merge
 // rule 5): what meetings is told never says whether an email was already a
-// contact. A dropped card's receipt is simply never stored.
+// contact.
 func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 	var in contactsapi.Submission
 	hash, ok := readBody(w, r, &in)
@@ -172,7 +170,7 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 	if !s.app.Live() {
 		// The app is uninstalled: nothing is kept, and the answer is a
 		// dropped card's.
-		writeJSON(w, http.StatusAccepted, contactsapi.SubmissionAnswer{Receipt: store.NewReceipt()})
+		accepted(w)
 		return
 	}
 	admit := func() error {
@@ -181,7 +179,7 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	}
-	res, err := o.Submit(r.Context(), store.Card{Key: contactsapi.KeyForCard(in.CardID), RequestHash: hash, Name: name, Address: addr, AddressKey: key,
+	_, err = o.Submit(r.Context(), store.Card{Key: contactsapi.KeyForCard(in.CardID), RequestHash: hash, Name: name, Address: addr, AddressKey: key,
 		Title: title, Meeting: in.Meeting, Participant: in.Participant}, admit, s.cfg.Now())
 	var tm errTooMany
 	switch {
@@ -196,84 +194,13 @@ func (s *Server) handleSubmission(w http.ResponseWriter, r *http.Request) {
 		s.internalErr(w, "submission")
 		return
 	}
-	writeJSON(w, http.StatusAccepted, contactsapi.SubmissionAnswer{Receipt: res.Receipt})
+	accepted(w)
 }
 
-// handleReceiptCheck is POST /v1/receipts/check.
-func (s *Server) handleReceiptCheck(w http.ResponseWriter, r *http.Request) {
-	var in contactsapi.ReceiptCheck
-	if _, ok := readBody(w, r, &in); !ok {
-		return
-	}
-	if !contactsapi.ValidSubject(in.Owner) {
-		fieldErr(w, contactsapi.FieldError{Field: "owner"})
-		return
-	}
-	if !contactsapi.ValidReceipt(in.Receipt) {
-		fieldErr(w, contactsapi.FieldError{Field: "receipt"})
-		return
-	}
-	o, err := s.store.ForOwner(in.Owner)
-	if err != nil {
-		apiErr(w, http.StatusBadRequest, contactsapi.ErrBadOwner)
-		return
-	}
-	if !s.app.Live() {
-		apiErr(w, http.StatusNotFound, contactsapi.ErrNotAccepting)
-		return
-	}
-	ref, known, err := o.CheckReceipt(r.Context(), in.Receipt)
-	switch {
-	case errors.Is(err, store.ErrNotAccepting):
-		apiErr(w, http.StatusNotFound, contactsapi.ErrNotAccepting)
-	case err != nil:
-		s.internalErr(w, "receipt check")
-	default:
-		writeJSON(w, http.StatusOK, contactsapi.ReceiptAnswer{Known: known, ContactRef: ref})
-	}
-}
-
-// handleAttendance is POST /v1/attendance: "met at meeting X" for a contact
-// the owner already has. Another owner's contact is the same 404 as an
-// unknown one.
-func (s *Server) handleAttendance(w http.ResponseWriter, r *http.Request) {
-	var in contactsapi.Attendance
-	hash, ok := readBody(w, r, &in)
-	if !ok {
-		return
-	}
-	title, err := in.Check()
-	if fieldErr(w, err) {
-		return
-	}
-	key := contactsapi.KeyForAttendance(in.Meeting.ID, in.Participant.ID)
-	if r.Header.Get(contactsapi.IdempotencyHeader) != key {
-		apiErr(w, http.StatusBadRequest, contactsapi.ErrKey)
-		return
-	}
-	o, err := s.store.ForOwner(in.Owner)
-	if err != nil {
-		apiErr(w, http.StatusBadRequest, contactsapi.ErrBadOwner)
-		return
-	}
-	if !s.app.Live() {
-		apiErr(w, http.StatusNotFound, contactsapi.ErrNotAccepting)
-		return
-	}
-	err = o.Attend(r.Context(), store.Visit{Key: key, RequestHash: hash, ContactRef: in.ContactRef, Via: in.Via, Title: title,
-		Meeting: in.Meeting, Participant: in.Participant}, s.cfg.Now())
-	switch {
-	case errors.Is(err, store.ErrNotAccepting):
-		apiErr(w, http.StatusNotFound, contactsapi.ErrNotAccepting)
-	case errors.Is(err, store.ErrNotFound):
-		apiErr(w, http.StatusNotFound, contactsapi.ErrNoSuchContact)
-	case errors.Is(err, store.ErrKeyReused):
-		apiErr(w, http.StatusConflict, contactsapi.ErrKeyReused)
-	case err != nil:
-		s.internalErr(w, "attendance")
-	default:
-		w.WriteHeader(http.StatusNoContent)
-	}
+// accepted is a card's one answer: 202, no body.
+func accepted(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // cardLimiter caps card submissions in a sliding window: perOwner for one

@@ -11,10 +11,11 @@ delete anyone.
 
 This is **phase 1** of muster's design
 [`docs/design/contacts.md`](https://github.com/ZacxDev/muster/blob/main/docs/design/contacts.md):
-the store, the Contacts tab, and the API the meetings plugin sends a card and
-"met at meeting X" to. Phase 2 (scheduled meetings with emailed invites) and
-phase 3 (WhatsApp, Discord, Signal and email handles, then messages) build on
-the same tables without rewriting them.
+the store, the Contacts tab, and the API the meetings plugin sends a guest's
+card to (a card links its contact to the meeting: "met at meeting X"). Phase 2 (scheduled meetings with emailed invites) and
+phase 3 (WhatsApp, Discord, Signal and email handles, then messages) add their
+own tables and values as later migrations. Receipts (recognising a returning
+guest) are phase 1c, minted and kept by meetings in the guest's browser.
 
 ## How it fits muster
 
@@ -113,7 +114,7 @@ The Kubernetes base reads the non-secret values from the
 
 - **List:** search (by name or email, on the server, as you type), **Add**
   (`plus`), **Settings** (`more`). Newest activity first; a chip only when it
-  says something (**Added by them**, **Invited**).
+  says something (**Added by them**).
 - **A contact:** a sheet (a bottom sheet on a phone, a dialog above 640 px)
   with the emails (each with **Copy**; a self-submitted one says **not
   confirmed**), the note, **Met** (each meeting, with **email not confirmed**
@@ -164,9 +165,7 @@ nothing; the same key and another body is `409`. Keys are kept 7 days.
 | route | body → answer |
 |---|---|
 | `GET /v1/owners/{owner}` | `200 {"accepting": true}` or `404 {"error": "not accepting"}`: may meetings offer the card? |
-| `POST /v1/submissions` | `{owner, card_id, meeting: {id, title, started_at, ended_at}, participant: {id, identity, typed_name, joined_at, left_at}, name, email}`, key `card:<card_id>` → `202 {"receipt": "<43 chars>"}` |
-| `POST /v1/receipts/check` | `{owner, receipt}` → `200 {"known": true, "contact_ref": "…"}` or `200 {"known": false}` |
-| `POST /v1/attendance` | `{owner, contact_ref, via: "receipt" \| "invite", meeting, participant}`, key `attend:<meeting>:<participant>` → `204` |
+| `POST /v1/submissions` | `{owner, card_id, meeting: {id, title, started_at, ended_at}, participant: {id, identity, typed_name, joined_at, left_at}, name, email}`, key `card:<card_id>` → `202`, no body |
 
 - **`owner`** is the subject meetings holds for the person, which is this
   plugin's subject for them too (the linked pair). A malformed one is `400`.
@@ -176,12 +175,10 @@ nothing; the same key and another body is `409`. Keys are kept 7 days.
   `expired` (has not opened the tab in 8 hours, the normal state) is. **Add
   people from Meetings** off is not accepting; nor is anyone once the app is
   uninstalled.
-- 🔴 **A submission answers the same `202 {"receipt"}` whether it made a
-  contact, merged into one, or was dropped** (not accepting), so nothing a
-  guest's card produces can tell whether an email was already a contact. A
-  dropped card's receipt is never stored, so it later checks `known: false`.
-- **Another owner's `contact_ref` or receipt** answers exactly as an unknown
-  one.
+- 🔴 **A submission answers the same `202` with no body whether it made a
+  contact, merged into one, or was dropped** (not accepting, or the app
+  uninstalled), so nothing a guest's card produces can tell whether an email
+  was already a contact.
 - **Limits:** 200 cards per owner and 2,000 per install in any 24 hours;
   past either, `429` with `Retry-After`. A replay is not counted.
 - **Fields:** the name is meetings' knock rule (1 to 40 characters, no control
@@ -200,7 +197,7 @@ lower-case ASCII by IDNA) is the only match key; plus-addressing and dots are
 second contact. A name the owner typed is never overwritten by a card (the
 card's goes in `said_name`); a name that came from a card takes a newer
 card's. One contact per email per owner is a constraint of the table, not a
-lookup. A merge by hand moves every email, handle, meeting link, receipt and
+lookup. A merge by hand moves every email, meeting link, idempotency key and
 provenance line onto the contact kept, in one transaction.
 
 ## Privacy
@@ -214,11 +211,11 @@ provenance line onto the contact kept, in one transaction.
   (the plugin is never told either).
 - 🔴 **No PII in logs.** Log lines carry the method, the route **pattern**
   (never the path or the query), the status, counts and event names; never a
-  name, email, title, note, search, token, code, receipt or subject. A test
+  name, email, title, note, search, token, code or subject. A test
   drives every route with distinctive fixtures and fails if one reaches the
   log (with a positive control that a fixture logged on purpose is seen).
 - **Delete really deletes.** A contact's delete removes its row and every
-  row hanging from it (emails, handles, provenance, meeting links, receipts,
+  row hanging from it (emails, provenance, meeting links,
   idempotency keys) and every meeting row no contact is left on; the database
   runs with `secure_delete` and checkpoints the WAL after a delete, so the
   bytes are not left on disk. **Delete everything** does it for every contact

@@ -167,8 +167,8 @@ func TestMergeRules(t *testing.T) {
 					t.Fatalf("origin %+v, want self_submitted after Title of m1", got.Provenance[0])
 				}
 				for _, m := range got.Meetings {
-					if !m.Unconfirmed || m.Via != "card" || m.Role != "guest" {
-						t.Fatalf("a card's meeting line %+v, want via card, role guest, unconfirmed", m)
+					if !m.Unconfirmed || m.Via != "card" {
+						t.Fatalf("a card's meeting line %+v, want via card, unconfirmed", m)
 					}
 				}
 			}
@@ -221,10 +221,7 @@ func TestAManualMergeMovesEveryChildTable(t *testing.T) {
 	keep, _ := o.Create(ctx, ContactIn{Name: "Grace", Emails: []string{"grace@example.test"}}, t0)
 	res := submit(t, o, card(t, "k1", "G. Hopper", "hopper@example.test", "m1", "p1"))
 	from := res.ContactID
-	if _, err := s.db.Exec(`INSERT INTO contact_handles (contact_id, owner, kind, value, value_key, source, created_at) VALUES (?, ?, 'signal', '+15550100', '+15550100', 'owner', 0)`, from, ownerA); err != nil {
-		t.Fatal(err)
-	}
-	tables := []string{"contact_emails", "contact_handles", "provenance", "meeting_links", "receipts", "idempotency"}
+	tables := []string{"contact_emails", "provenance", "meeting_links", "idempotency"}
 	before := map[string]int{}
 	for _, tb := range tables {
 		before[tb] = count(t, s, `SELECT count(*) FROM `+tb+` WHERE contact_id = ?`, from)
@@ -304,8 +301,7 @@ func holds(t *testing.T, s *Store, table, needle string) bool {
 	return false
 }
 
-// 🔴 After a delete, no table holds the contact's id, its email key, or the
-// receipt's hash; the meeting only it was linked to is gone, and a meeting
+// 🔴 After a delete, no table holds the contact's id or its email; the meeting only it was linked to is gone, and a meeting
 // another contact shares is kept. The table list is read from the schema:
 // a new table must be classed in PersonTables or otherTables, or this fails.
 func TestDeletingAContactLeavesNothingInAnyTable(t *testing.T) {
@@ -314,10 +310,7 @@ func TestDeletingAContactLeavesNothingInAnyTable(t *testing.T) {
 	gone := submit(t, o, card(t, "k1", "Grace", "grace.deleted@example.test", "mOnly", "p1"))
 	submit(t, o, card(t, "k2", "Grace", "grace.deleted@example.test", "mShared", "p2"))
 	other := submit(t, o, card(t, "k3", "Ada", "ada.kept@example.test", "mShared", "p3"))
-	if _, err := s.db.Exec(`INSERT INTO contact_handles (contact_id, owner, kind, value, value_key, source, created_at) VALUES (?, ?, 'signal', '+15550100', '+15550100', 'owner', 0)`, gone.ContactID, ownerA); err != nil {
-		t.Fatal(err)
-	}
-	needles := []string{gone.ContactID, "grace.deleted@example.test", Hash(gone.Receipt), "mOnly"}
+	needles := []string{gone.ContactID, "grace.deleted@example.test", "mOnly"}
 	known := append(slices.Clone(PersonTables), otherTables...)
 	for _, tb := range tableNames(t, s) {
 		if !slices.Contains(known, tb) {
@@ -349,9 +342,6 @@ func TestDeletingAContactLeavesNothingInAnyTable(t *testing.T) {
 	}
 	if n := count(t, s, `SELECT count(*) FROM meetings WHERE owner = ? AND meeting_id = 'mShared'`, ownerA); n != 1 {
 		t.Errorf("the meeting another contact shares was deleted")
-	}
-	if _, known, _ := o.CheckReceipt(ctx, gone.Receipt); known {
-		t.Errorf("the deleted contact's receipt still checks known")
 	}
 	if _, err := o.Get(ctx, other.ContactID); err != nil {
 		t.Errorf("the other contact: %v", err)
@@ -438,17 +428,9 @@ func TestOwnerScoping(t *testing.T) {
 		if _, err := a.Merge(ctx, aMine.ID, id, t0); !errors.Is(err, ErrNotFound) {
 			t.Errorf("Merge of B's contact into A's = %v, want ErrNotFound", err)
 		}
-		v := Visit{Key: "attend:mA:pA", RequestHash: "h", ContactRef: id, Via: "receipt",
-			Meeting: contactsapi.Meeting{ID: "mA"}, Participant: contactsapi.Participant{ID: "pA", Identity: "guest-pA", TypedName: "X"}}
-		if err := a.Attend(ctx, v, t0); !errors.Is(err, ErrNotFound) {
-			t.Errorf("owner scoping attendance: Attend with B's contact_ref as A = %v, want ErrNotFound", err)
-		}
 	}
 	if _, err := a.Get(ctx, unknown); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("an unknown id: %v", err)
-	}
-	if _, known, err := a.CheckReceipt(ctx, bRes.Receipt); known || err != nil {
-		t.Errorf("A checking B's receipt: known=%v %v, want not known", known, err)
 	}
 	rows, _, _ := a.List(ctx, "bart", nil, 10)
 	if len(rows) != 0 {
@@ -486,7 +468,7 @@ func TestAccepting(t *testing.T) {
 	if !st.Accepting || st.Known {
 		t.Fatalf("a person never seen: %+v, want accepting", st)
 	}
-	if res := submit(t, never, card(t, "k1", "Grace", "grace@example.test", "m1", "p1")); res.Outcome != CardCreated || !res.Stored {
+	if res := submit(t, never, card(t, "k1", "Grace", "grace@example.test", "m1", "p1")); res.Outcome != CardCreated || res.ContactID == "" {
 		t.Fatalf("a never-opened owner's card: %+v, want created (decision 8)", res)
 	}
 	st, _ = s.StandingOf(ctx, never.Subject())
@@ -499,7 +481,7 @@ func TestAccepting(t *testing.T) {
 	if err := off.SetCollect(ctx, false, t0); err != nil {
 		t.Fatal(err)
 	}
-	if res := submit(t, off, card(t, "k2", "Grace", "grace@example.test", "m1", "p1")); res.Outcome != CardDropped || res.Stored {
+	if res := submit(t, off, card(t, "k2", "Grace", "grace@example.test", "m1", "p1")); res.Outcome != CardDropped || res.ContactID != "" {
 		t.Fatalf("accepting switch: a card with Add people from Meetings off: %+v, want dropped", res)
 	}
 	if n := count(t, s, `SELECT count(*) FROM contacts WHERE owner = ?`, ownerA); n != 0 {
@@ -516,9 +498,6 @@ func TestAccepting(t *testing.T) {
 	}
 	if res := submit(t, rev, card(t, "k3", "Grace", "grace@example.test", "m1", "p1")); res.Outcome != CardDropped {
 		t.Fatalf("accepting revoked: a revoked owner's card: %+v, want dropped", res)
-	}
-	if _, _, err := rev.CheckReceipt(ctx, NewReceipt()); !errors.Is(err, ErrNotAccepting) {
-		t.Fatalf("a revoked owner's receipt check: %v, want ErrNotAccepting", err)
 	}
 	if _, err := s.Judge(ctx, nil, []string{ownerB}, nil, t0.Add(2*time.Second), t0.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
@@ -567,11 +546,8 @@ func TestIdempotency(t *testing.T) {
 	c := card(t, "k1", "Grace", "grace@example.test", "m1", "p1")
 	first := submit(t, o, c)
 	again := submit(t, o, c)
-	if again.Outcome != CardReplayed || again.ContactID != first.ContactID || again.Receipt == first.Receipt {
-		t.Fatalf("a replay: %+v, want replayed for the same contact with a fresh receipt", again)
-	}
-	if ref, known, _ := o.CheckReceipt(ctx, again.Receipt); !known || ref != first.ContactID {
-		t.Fatalf("the replay's receipt: %q %v, want known for the same contact", ref, known)
+	if again.Outcome != CardReplayed || again.ContactID != first.ContactID {
+		t.Fatalf("a replay: %+v, want replayed for the same contact", again)
 	}
 	for _, q := range []string{`SELECT count(*) FROM contacts WHERE owner = ?`, `SELECT count(*) FROM meeting_links WHERE owner = ?`, `SELECT count(*) FROM provenance WHERE owner = ?`} {
 		if n := count(t, s, q, ownerA); n != 1 {

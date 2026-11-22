@@ -50,7 +50,7 @@ const (
 // Email is one address of a contact.
 type Email struct {
 	Address string `json:"address"`
-	Source  string `json:"source"`    // owner, self, invite
+	Source  string `json:"source"`    // owner, self
 	Confirm bool   `json:"confirmed"` // phase 2: a confirmation link was followed
 }
 
@@ -60,8 +60,7 @@ type MeetingLine struct {
 	Title     string     `json:"title"`
 	StartedAt *time.Time `json:"started_at"`
 	EndedAt   *time.Time `json:"ended_at"`
-	Role      string     `json:"role"` // guest, invitee
-	Via       string     `json:"via"`  // card, invite, receipt, owner
+	Via       string     `json:"via"` // card
 	TypedName string     `json:"typed_name"`
 	At        time.Time  `json:"at"`
 	// Unconfirmed: the line came from a card, whose email nobody has
@@ -72,7 +71,7 @@ type MeetingLine struct {
 
 // Origin is one provenance line: how the contact came to be, or a merge.
 type Origin struct {
-	Kind         string    `json:"kind"` // owner_entered, self_submitted, invited, merged
+	Kind         string    `json:"kind"` // owner_entered, self_submitted, merged
 	MeetingID    string    `json:"meeting_id,omitempty"`
 	MeetingTitle string    `json:"meeting_title,omitempty"`
 	SaidName     string    `json:"said_name,omitempty"`
@@ -380,7 +379,7 @@ func (o *Owner) setEmails(ctx context.Context, tx *sql.Tx, id string, want []ema
 }
 
 // Delete deletes a contact for real: its row and, by cascade, its emails,
-// handles, provenance, meeting links, receipts and idempotency rows; then
+// provenance, meeting links and idempotency rows; then
 // every meeting row no link is left on; then a checkpoint, so secure_delete's
 // zeroed pages are what is on disk. The audit row says nothing about whom.
 // meetings' own records of the calls are not touched (they are meetings').
@@ -421,7 +420,7 @@ func (o *Owner) dropOrphanMeetings(ctx context.Context, tx *sql.Tx) error {
 }
 
 // DeleteAll is Delete everything: every contact, and so every email,
-// handle, provenance line, meeting link, receipt and key; every meeting
+// provenance line, meeting link and key; every meeting
 // row; and the owner's audit trail. The owner's own row (their settings)
 // and session stay: they are how the page keeps working.
 func (o *Owner) DeleteAll(ctx context.Context, now time.Time) error {
@@ -449,7 +448,7 @@ func (o *Owner) DeleteAll(ctx context.Context, now time.Time) error {
 	return o.s.checkpoint(ctx)
 }
 
-// Merge moves every email, handle, meeting link, receipt, key and
+// Merge moves every email, meeting link, key and
 // provenance line of from onto keep, adds a merged line, and deletes from:
 // one transaction (merge rule 4). keep keeps its name (or takes from's when
 // it has none).
@@ -478,10 +477,8 @@ func (o *Owner) Merge(ctx context.Context, keep, from string, now time.Time) (Co
 	}
 	for _, q := range []string{
 		`UPDATE contact_emails SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
-		`UPDATE contact_handles SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
 		`UPDATE provenance SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
 		`UPDATE meeting_links SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
-		`UPDATE receipts SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
 		`UPDATE idempotency SET contact_id = ? WHERE contact_id = ? AND owner = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, keep, from, o.subject); err != nil {
@@ -542,7 +539,7 @@ func (o *Owner) Get(ctx context.Context, id string) (Contact, error) {
 	}
 	rows.Close()
 
-	rows, err = o.s.db.QueryContext(ctx, `SELECT l.meeting_id, m.title, m.started_at, m.ended_at, l.role, l.via, l.typed_name, l.at
+	rows, err = o.s.db.QueryContext(ctx, `SELECT l.meeting_id, m.title, m.started_at, m.ended_at, l.via, l.typed_name, l.at
 		FROM meeting_links l JOIN meetings m ON m.owner = ? AND m.meeting_id = l.meeting_id
 		WHERE l.contact_id = ? AND l.owner = ? ORDER BY coalesce(m.started_at, l.at) DESC, l.meeting_id`, o.subject, id, o.subject)
 	if err != nil {
@@ -552,7 +549,7 @@ func (o *Owner) Get(ctx context.Context, id string) (Contact, error) {
 		var m MeetingLine
 		var st, en sql.NullInt64
 		var at int64
-		if err := rows.Scan(&m.MeetingID, &m.Title, &st, &en, &m.Role, &m.Via, &m.TypedName, &at); err != nil {
+		if err := rows.Scan(&m.MeetingID, &m.Title, &st, &en, &m.Via, &m.TypedName, &at); err != nil {
 			rows.Close()
 			return Contact{}, err
 		}

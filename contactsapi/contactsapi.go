@@ -10,9 +10,7 @@
 // The API (README, "The contacts API"):
 //
 //	GET  /v1/owners/{owner}   200 {"accepting": true} or 404 {"error": "not accepting"}
-//	POST /v1/submissions      a guest's card: 202 {"receipt": "<43 chars>"}, whatever happened
-//	POST /v1/receipts/check   200 {"known": true, "contact_ref": "…"} or 200 {"known": false}
-//	POST /v1/attendance       "met at meeting X" for a guest already known: 204
+//	POST /v1/submissions      a guest's card: 202 and no body, whatever happened
 //
 // Every route takes `Authorization: Bearer <CONTACTS_API_TOKEN>`; every
 // write takes an Idempotency-Key (KeyFor*). Bodies are JSON, at most
@@ -34,10 +32,8 @@ import (
 
 // The routes.
 const (
-	RouteOwner         = "/v1/owners/" // + the owner's subject
-	RouteSubmissions   = "/v1/submissions"
-	RouteReceiptsCheck = "/v1/receipts/check"
-	RouteAttendance    = "/v1/attendance"
+	RouteOwner       = "/v1/owners/" // + the owner's subject
+	RouteSubmissions = "/v1/submissions"
 )
 
 // IdempotencyHeader carries a write's key.
@@ -62,7 +58,7 @@ const (
 	ErrServerInternal = "the request could not be completed"
 )
 
-// Meeting is the meeting a card or an attendance names. ID is meetings' own
+// Meeting is the meeting a card names. ID is meetings' own
 // id (1 to 64 base64url characters, so it can ride in muster's ?ref=);
 // Title is what the owner named it (or meetings' default date label), at
 // most MaxTitleRunes, and the only meeting field that is free text.
@@ -85,7 +81,9 @@ type Participant struct {
 }
 
 // Submission is POST /v1/submissions: a guest's card. Its key is
-// KeyForCard(CardID).
+// KeyForCard(CardID). The answer is 202 with no body, the same whether the
+// card made a contact, merged into one, or was dropped (the owner is not
+// accepting): nothing in it says whether an email was already a contact.
 type Submission struct {
 	Owner       string      `json:"owner"`
 	CardID      string      `json:"card_id"`
@@ -93,36 +91,6 @@ type Submission struct {
 	Participant Participant `json:"participant"`
 	Name        string      `json:"name"`
 	Email       string      `json:"email"`
-}
-
-// SubmissionAnswer is its 202 answer, the same whether the card made a
-// contact, merged into one, or was dropped (the owner is not accepting).
-type SubmissionAnswer struct {
-	Receipt string `json:"receipt"`
-}
-
-// ReceiptCheck is POST /v1/receipts/check.
-type ReceiptCheck struct {
-	Owner   string `json:"owner"`
-	Receipt string `json:"receipt"`
-}
-
-// ReceiptAnswer is its 200 answer. ContactRef is set only when Known.
-type ReceiptAnswer struct {
-	Known      bool   `json:"known"`
-	ContactRef string `json:"contact_ref,omitempty"`
-}
-
-// Attendance is POST /v1/attendance: a contact the owner already has was in
-// a meeting. Via is how meetings knows it is them: "receipt" (their browser's
-// receipt checked known) or "invite" (phase 2: their own invite link). Its
-// key is KeyForAttendance(Meeting.ID, Participant.ID).
-type Attendance struct {
-	Owner       string      `json:"owner"`
-	ContactRef  string      `json:"contact_ref"`
-	Via         string      `json:"via"`
-	Meeting     Meeting     `json:"meeting"`
-	Participant Participant `json:"participant"`
 }
 
 // OwnerAnswer is GET /v1/owners/{owner}'s 200 answer.
@@ -139,11 +107,6 @@ type ErrorAnswer struct {
 // KeyForCard is a submission's Idempotency-Key.
 func KeyForCard(cardID string) string { return "card:" + cardID }
 
-// KeyForAttendance is an attendance's Idempotency-Key.
-func KeyForAttendance(meetingID, participantID string) string {
-	return "attend:" + meetingID + ":" + participantID
-}
-
 var (
 	subjectRE = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
 	tokenRE   = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
@@ -155,12 +118,8 @@ var (
 // ValidSubject is the shape of a muster subject: 22 base64url characters.
 func ValidSubject(s string) bool { return subjectRE.MatchString(s) }
 
-// ValidContactRef is a contact id's shape: 22 base64url characters.
-func ValidContactRef(s string) bool { return subjectRE.MatchString(s) }
-
-// ValidCardID and ValidReceipt are 32 random bytes, 43 base64url characters.
-func ValidCardID(s string) bool  { return tokenRE.MatchString(s) }
-func ValidReceipt(s string) bool { return tokenRE.MatchString(s) }
+// ValidCardID is 32 random bytes, 43 base64url characters.
+func ValidCardID(s string) bool { return tokenRE.MatchString(s) }
 
 // ValidRef is meetings' meeting, participant and identity shape: 1 to 64
 // base64url characters (muster's ?ref= pattern).
@@ -326,23 +285,6 @@ func (s Submission) Check() (name, address, key, title string, err error) {
 		return "", "", "", "", FieldError{"email"}
 	}
 	return name, address, key, title, nil
-}
-
-// Check validates an attendance's fields, returning the meeting's title.
-func (a Attendance) Check() (title string, err error) {
-	if !ValidSubject(a.Owner) {
-		return "", FieldError{"owner"}
-	}
-	if !ValidContactRef(a.ContactRef) {
-		return "", FieldError{"contact_ref"}
-	}
-	if a.Via != "receipt" && a.Via != "invite" {
-		return "", FieldError{"via"}
-	}
-	if title, err = checkMeeting(a.Meeting); err != nil {
-		return "", err
-	}
-	return title, checkParticipant(a.Participant)
 }
 
 func checkMeeting(m Meeting) (string, error) {

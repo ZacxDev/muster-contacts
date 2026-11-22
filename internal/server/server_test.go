@@ -351,17 +351,16 @@ func TestMustersWordOnAPersonReachesTheAPI(t *testing.T) {
 	if resp, _ := e.do("GET", "/api/contacts", tok, nil); resp.StatusCode != 401 {
 		t.Fatalf("the hidden person's session still works: %d", resp.StatusCode)
 	}
-	receipt := e.submit(s, cardID("Hid"), "Grace", "grace@example.test", "m1", "p1")
+	e.submit(s, cardID("Hid"), "Grace Hidden", "grace.hidden@example.test", "m1", "p1")
 	e.fake.Show(app.PluginID, ada.ID)
 	e.app.PollOnce(bg)
 	if got := standing(); got != 200 {
 		t.Fatalf("expired accepted: after Show and a poll (the grant is expired: Hide ended its clock), owners = %d, want 200", got)
 	}
-	resp, body := e.apiDo("POST", "/v1/receipts/check", map[string]any{"owner": s, "receipt": receipt})
-	if resp.StatusCode != 200 || !strings.Contains(string(body), `"known":false`) {
-		t.Fatalf("the card sent while hidden was kept: %d %s", resp.StatusCode, body)
-	}
 	tok = e.session(ada)
+	if list := decode[struct{ Contacts []store.Row }](t, mustOK(t, e)(e.do("GET", "/api/contacts", tok, nil))); len(list.Contacts) != 0 {
+		t.Fatalf("accepting revoked: the card sent while hidden was kept: %+v", list.Contacts)
+	}
 	e.fake.Expire(app.PluginID, ada.ID)
 	e.app.PollOnce(bg)
 	if got := standing(); got != 200 {
@@ -375,6 +374,10 @@ func TestMustersWordOnAPersonReachesTheAPI(t *testing.T) {
 	e.app.PollOnce(bg)
 	if got := standing(); got != 404 {
 		t.Fatalf("after uninstall, owners = %d, want 404", got)
+	}
+	resp, body := e.apiDo("POST", "/v1/submissions", cardBody(s, cardID("Gone"), "Grace", "grace.gone@example.test", "m2", "p2"), "Idempotency-Key", "card:"+cardID("Gone"))
+	if resp.StatusCode != 202 || len(body) != 0 {
+		t.Fatalf("after uninstall, a card = %d %q, want 202 and no body (a dropped card's one answer)", resp.StatusCode, body)
 	}
 }
 
@@ -428,7 +431,7 @@ func leaks(log string) []string {
 
 // Every route that takes a name, an email, a title, a note or a search is
 // driven with the fixtures, success and refusal; the log holds none of
-// them, nor a token, a code, a receipt or a subject.
+// them, nor a token, a code or a subject.
 func TestNoPIIReachesTheLog(t *testing.T) {
 	e := newEnv(t)
 	s := e.meetingsSubject(ada)
@@ -438,12 +441,10 @@ func TestNoPIIReachesTheLog(t *testing.T) {
 	if resp.StatusCode != 202 {
 		t.Fatalf("submission = %d %s", resp.StatusCode, raw)
 	}
-	receipt := decode[contactsapi.SubmissionAnswer](t, raw).Receipt
 	bad := cardBody(s, cardID("Bad"), piiFixtures[0], "not-an-email "+piiFixtures[1], "mPii", "pBad")
 	e.apiDo("POST", "/v1/submissions", bad, "Idempotency-Key", "card:"+cardID("Bad"))
 	e.apiDo("POST", "/v1/submissions", `{"owner": "`+piiFixtures[1]+`", "x": 1}`, "Idempotency-Key", "card:x")
 	e.apiDo("GET", "/v1/owners/"+piiFixtures[1], nil)
-	e.apiDo("POST", "/v1/receipts/check", map[string]any{"owner": s, "receipt": receipt})
 	tok := e.session(ada)
 	e.do("GET", "/api/contacts?q="+piiFixtures[4], tok, nil)
 	c := decode[struct{ Contact store.Contact }](t, mustOK(t, e)(e.do("POST", "/api/contacts", tok, map[string]any{"name": piiFixtures[5], "note": piiFixtures[3]})))
@@ -455,9 +456,9 @@ func TestNoPIIReachesTheLog(t *testing.T) {
 	if l := leaks(logged); len(l) > 0 {
 		t.Fatalf("no PII in logs: the log holds %q:\n%s", l, logged)
 	}
-	for _, secret := range []string{tok, receipt, s, apiToken, app.Token, cardID("Pii")} {
+	for _, secret := range []string{tok, s, apiToken, app.Token, cardID("Pii")} {
 		if strings.Contains(logged, secret) {
-			t.Fatalf("no PII in logs: the log holds a token, receipt, subject or card id %q", secret)
+			t.Fatalf("no PII in logs: the log holds a token, subject or card id %q", secret)
 		}
 	}
 	if !strings.Contains(logged, "api POST /v1/submissions 202") || !strings.Contains(logged, "http GET /api/contacts 200") {

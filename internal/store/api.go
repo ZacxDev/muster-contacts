@@ -9,14 +9,9 @@ import (
 	"github.com/ZacxDev/muster-contacts/contactsapi"
 )
 
-// The API's writes (design: "The contacts API"): a guest's card, a known
-// guest's attendance, a receipt's check. Each runs in one transaction with
-// its idempotency key: the same key and body answer again and change
+// The API's one write (design: "The contacts API"): a guest's card. It runs
+// in one transaction with its idempotency key: the same key and body answer again and change
 // nothing; the same key and another body is ErrKeyReused.
-
-// ErrNotAccepting is an owner who refuses writes: muster answered them
-// revoked, or they turned "Add people from Meetings" off.
-var ErrNotAccepting = errors.New("not accepting")
 
 // ErrKeyReused is an idempotency key sent again with a different body.
 var ErrKeyReused = errors.New("idempotency key reused with a different body")
@@ -42,12 +37,10 @@ const (
 	CardReplayed = "replayed"
 )
 
-// CardResult is what Submit did, and the receipt to answer. Stored says the
-// receipt checks known from now on (it is not, for a dropped card).
+// CardResult is what Submit did: the outcome and the contact it made or
+// merged into ("" for a dropped card).
 type CardResult struct {
 	Outcome   string
-	Receipt   string
-	Stored    bool
 	ContactID string
 }
 
@@ -95,10 +88,11 @@ func (o *Owner) upsertMeeting(ctx context.Context, tx *sql.Tx, title string, m c
 	return err
 }
 
-func (o *Owner) link(ctx context.Context, tx *sql.Tx, contact, role, via string, m contactsapi.Meeting, p contactsapi.Participant, now time.Time) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO meeting_links (owner, contact_id, meeting_id, participant_id, identity, role, typed_name, via, joined_at, left_at, at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (owner, meeting_id, participant_id) DO NOTHING`,
-		o.subject, contact, m.ID, p.ID, p.Identity, role, p.TypedName, via, nullMS(p.JoinedAt), nullMS(p.LeftAt), ms(now))
+// link records "met at meeting X" from a guest's card.
+func (o *Owner) link(ctx context.Context, tx *sql.Tx, contact string, m contactsapi.Meeting, p contactsapi.Participant, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO meeting_links (owner, contact_id, meeting_id, participant_id, identity, typed_name, via, joined_at, left_at, at)
+		VALUES (?, ?, ?, ?, ?, ?, 'card', ?, ?, ?) ON CONFLICT (owner, meeting_id, participant_id) DO NOTHING`,
+		o.subject, contact, m.ID, p.ID, p.Identity, p.TypedName, nullMS(p.JoinedAt), nullMS(p.LeftAt), ms(now))
 	return err
 }
 
@@ -117,22 +111,13 @@ func (o *Owner) Submit(ctx context.Context, c Card, admit func() error, now time
 		return CardResult{}, err
 	}
 	defer tx.Rollback()
-	receipt := NewReceipt()
 	seen, _, contact, err := o.remembered(ctx, tx, c.Key, c.RequestHash)
 	if err != nil {
 		return CardResult{}, err
 	}
 	if seen {
-		// A retry after a lost answer: the first answer's receipt was never
-		// read, so a fresh one is minted for the same contact.
-		res := CardResult{Outcome: CardReplayed, Receipt: receipt}
-		if contact.Valid {
-			if err := o.storeReceipt(ctx, tx, receipt, contact.String, now); err != nil {
-				return CardResult{}, err
-			}
-			res.Stored, res.ContactID = true, contact.String
-		}
-		return res, tx.Commit()
+		// A retry after a lost answer: nothing changes.
+		return CardResult{Outcome: CardReplayed, ContactID: contact.String}, tx.Commit()
 	}
 	if err := admit(); err != nil {
 		return CardResult{}, err
@@ -148,7 +133,7 @@ func (o *Owner) Submit(ctx context.Context, c Card, admit func() error, now time
 		if err := audit(ctx, tx, now, o.subject, "card.dropped", "not accepting"); err != nil {
 			return CardResult{}, err
 		}
-		return CardResult{Outcome: CardDropped, Receipt: receipt}, tx.Commit()
+		return CardResult{Outcome: CardDropped}, tx.Commit()
 	}
 	if err := o.ensureOwner(ctx, tx, now); err != nil {
 		return CardResult{}, err
@@ -156,7 +141,7 @@ func (o *Owner) Submit(ctx context.Context, c Card, admit func() error, now time
 	if err := o.upsertMeeting(ctx, tx, c.Title, c.Meeting); err != nil {
 		return CardResult{}, err
 	}
-	res := CardResult{Receipt: receipt, Stored: true}
+	var res CardResult
 	var id, name, source string
 	err = tx.QueryRowContext(ctx, `SELECT x.contact_id, c.name, c.name_source FROM contact_emails x JOIN contacts c ON c.owner = ? AND c.id = x.contact_id
 		WHERE x.owner = ? AND x.address_key = ?`, o.subject, o.subject, c.AddressKey).Scan(&id, &name, &source)
@@ -197,10 +182,7 @@ func (o *Owner) Submit(ctx context.Context, c Card, admit func() error, now time
 		return CardResult{}, err
 	}
 	res.ContactID = id
-	if err := o.link(ctx, tx, id, "guest", "card", c.Meeting, c.Participant, now); err != nil {
-		return CardResult{}, err
-	}
-	if err := o.storeReceipt(ctx, tx, receipt, id, now); err != nil {
+	if err := o.link(ctx, tx, id, c.Meeting, c.Participant, now); err != nil {
 		return CardResult{}, err
 	}
 	if err := o.remember(ctx, tx, c.Key, c.RequestHash, 202, id, now); err != nil {
@@ -210,89 +192,4 @@ func (o *Owner) Submit(ctx context.Context, c Card, admit func() error, now time
 		return CardResult{}, err
 	}
 	return res, tx.Commit()
-}
-
-func (o *Owner) storeReceipt(ctx context.Context, tx *sql.Tx, receipt, contact string, now time.Time) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO receipts (receipt_sha256, owner, contact_id, created_at) VALUES (?, ?, ?, ?)`, Hash(receipt), o.subject, contact, ms(now))
-	return err
-}
-
-// CheckReceipt says whether a guest browser's receipt is still a contact of
-// this owner, and which. Another owner's receipt is not known, as an unknown
-// one is not.
-func (o *Owner) CheckReceipt(ctx context.Context, receipt string) (string, bool, error) {
-	st, err := o.s.StandingOf(ctx, o.subject)
-	if err != nil {
-		return "", false, err
-	}
-	if !st.Accepting {
-		return "", false, ErrNotAccepting
-	}
-	var id string
-	err = o.s.db.QueryRowContext(ctx, `SELECT contact_id FROM receipts WHERE receipt_sha256 = ? AND owner = ?`, Hash(receipt), o.subject).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	return id, true, nil
-}
-
-// Visit is a checked attendance (contactsapi.Attendance.Check).
-type Visit struct {
-	Key         string // contactsapi.KeyForAttendance
-	RequestHash string
-	ContactRef  string
-	Via         string // receipt, invite
-	Title       string
-	Meeting     contactsapi.Meeting
-	Participant contactsapi.Participant
-}
-
-// Attend records that a contact the owner has was in a meeting ("met at
-// meeting X"). An unknown contact, or another owner's, is ErrNotFound.
-func (o *Owner) Attend(ctx context.Context, v Visit, now time.Time) error {
-	tx, err := o.s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	seen, _, _, err := o.remembered(ctx, tx, v.Key, v.RequestHash)
-	if err != nil || seen {
-		return err
-	}
-	st, err := standingOf(ctx, tx, o.subject)
-	if err != nil {
-		return err
-	}
-	if !st.Accepting {
-		return ErrNotAccepting
-	}
-	var one int
-	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM contacts WHERE id = ? AND owner = ?`, v.ContactRef, o.subject).Scan(&one); errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	} else if err != nil {
-		return err
-	}
-	if err := o.upsertMeeting(ctx, tx, v.Title, v.Meeting); err != nil {
-		return err
-	}
-	role := "guest"
-	if v.Via == "invite" {
-		role = "invitee"
-	}
-	if err := o.link(ctx, tx, v.ContactRef, role, v.Via, v.Meeting, v.Participant, now); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE contacts SET active_at = ? WHERE id = ? AND owner = ?`, ms(now), v.ContactRef, o.subject); err != nil {
-		return err
-	}
-	if err := o.remember(ctx, tx, v.Key, v.RequestHash, 204, v.ContactRef, now); err != nil {
-		return err
-	}
-	if err := audit(ctx, tx, now, o.subject, "link.made", v.Via); err != nil {
-		return err
-	}
-	return tx.Commit()
 }

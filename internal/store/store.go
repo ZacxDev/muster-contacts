@@ -1,7 +1,7 @@
 // Package store is the plugin's SQLite database (design: "Data model (the
 // plugin's SQLite)"): owners and their sessions, contacts, their emails,
-// where each came from, the meetings they were in, the guest browsers'
-// receipts, the API's idempotency keys, and an audit trail that never holds
+// where each came from, the meetings they were in, the API's idempotency
+// keys, and an audit trail that never holds
 // a name, an email, a title or a note.
 //
 // An owner is a person muster's server-app redeem named, known only by the
@@ -17,8 +17,8 @@
 // owner is tied to its contact's by a composite foreign key, so a row cannot
 // hang under another owner's contact.
 //
-// Times are stored as Unix milliseconds (UTC). Tokens and receipts are
-// stored only as their SHA-256 (Hash).
+// Times are stored as Unix milliseconds (UTC). Session tokens are stored
+// only as their SHA-256 (Hash).
 package store
 
 import (
@@ -49,7 +49,7 @@ var ErrNotFound = errors.New("not found")
 // one is owner-scoped, and a contact's delete reaches every one of them
 // (TestDeletingAContactLeavesNothingInAnyTable reads the schema, and fails on
 // a table not listed here or in otherTables).
-var PersonTables = []string{"contacts", "contact_emails", "contact_handles", "provenance", "meetings", "meeting_links", "receipts", "idempotency"}
+var PersonTables = []string{"contacts", "contact_emails", "provenance", "meetings", "meeting_links", "idempotency"}
 
 // otherTables are the tables that hold no contact's data: the owner's own
 // row and sessions, and the audit trail (which holds no PII).
@@ -58,8 +58,10 @@ var otherTables = []string{"owners", "owner_sessions", "audit"}
 // migrations are applied in order; PRAGMA user_version counts those done.
 // Never edit one that has shipped: add the next.
 var migrations = []string{
-	// 1: phase 1 (design: "Data model"). contact_handles is created empty
-	// for phase 3, so its rows need no migration that rewrites these.
+	// 1: phase 1 (design: "Data model"), cut to what phase 1 uses: no
+	// handles (phase 3), no invites (phase 2) and no receipts (phase 1c,
+	// minted and kept by meetings in the guest's browser). Each later
+	// phase adds its own tables and values as the next migration.
 	`CREATE TABLE owners (
 		subject      TEXT    PRIMARY KEY CHECK (length(subject) = 22), -- the (pair's) subject; never a muster user id
 		display_name TEXT    NOT NULL DEFAULT '',                       -- from the redeem; never an email
@@ -80,7 +82,7 @@ var migrations = []string{
 		id          TEXT    PRIMARY KEY CHECK (length(id) = 22), -- random; the contact_ref meetings holds
 		owner       TEXT    NOT NULL REFERENCES owners (subject) ON DELETE CASCADE,
 		name        TEXT    NOT NULL DEFAULT '',
-		name_source TEXT    NOT NULL CHECK (name_source IN ('owner', 'self', 'invite')),
+		name_source TEXT    NOT NULL CHECK (name_source IN ('owner', 'self')),
 		note        TEXT    NOT NULL DEFAULT '',                 -- the owner's own words, at most 2,000
 		created_at  INTEGER NOT NULL,
 		updated_at  INTEGER NOT NULL,
@@ -94,30 +96,18 @@ var migrations = []string{
 		address     TEXT    NOT NULL,                            -- as given, for display and sending
 		address_key TEXT    NOT NULL,                            -- the merge key (contactsapi.CheckEmail)
 		verified_at INTEGER,                                     -- phase 2: a confirmation link was followed
-		source      TEXT    NOT NULL CHECK (source IN ('owner', 'self', 'invite')),
+		source      TEXT    NOT NULL CHECK (source IN ('owner', 'self')),
 		created_at  INTEGER NOT NULL,
 		PRIMARY KEY (owner, address_key),                        -- 🔴 one contact per email per owner
 		FOREIGN KEY (contact_id, owner) REFERENCES contacts (id, owner) ON DELETE CASCADE
 	) STRICT;
 	CREATE INDEX contact_emails_contact ON contact_emails (contact_id);
-	CREATE TABLE contact_handles (
-		contact_id TEXT    NOT NULL,
-		owner      TEXT    NOT NULL,
-		kind       TEXT    NOT NULL CHECK (kind IN ('whatsapp', 'signal', 'discord', 'email')),
-		value      TEXT    NOT NULL,
-		value_key  TEXT    NOT NULL,
-		source     TEXT    NOT NULL CHECK (source IN ('owner', 'self', 'inbound')),
-		created_at INTEGER NOT NULL,
-		PRIMARY KEY (owner, kind, value_key),
-		FOREIGN KEY (contact_id, owner) REFERENCES contacts (id, owner) ON DELETE CASCADE
-	) STRICT;
-	CREATE INDEX contact_handles_contact ON contact_handles (contact_id);
 	CREATE TABLE provenance (
 		id         INTEGER PRIMARY KEY,
 		contact_id TEXT    NOT NULL,
 		owner      TEXT    NOT NULL,
-		kind       TEXT    NOT NULL CHECK (kind IN ('owner_entered', 'self_submitted', 'invited', 'merged')),
-		meeting_id TEXT,                                         -- self_submitted, invited, a card's merge: which meeting
+		kind       TEXT    NOT NULL CHECK (kind IN ('owner_entered', 'self_submitted', 'merged')),
+		meeting_id TEXT,                                         -- self_submitted, a card's merge: which meeting
 		said_name  TEXT    NOT NULL DEFAULT '',                  -- a card's name when it differs; the other contact's on a merge by hand
 		at         INTEGER NOT NULL,
 		FOREIGN KEY (contact_id, owner) REFERENCES contacts (id, owner) ON DELETE CASCADE
@@ -137,9 +127,8 @@ var migrations = []string{
 		meeting_id     TEXT    NOT NULL,
 		participant_id TEXT    NOT NULL,                         -- meetings' participants.id
 		identity       TEXT    NOT NULL,                         -- meetings' LiveKit identity
-		role           TEXT    NOT NULL CHECK (role IN ('guest', 'invitee')),
 		typed_name     TEXT    NOT NULL,                         -- what they typed at the knock
-		via            TEXT    NOT NULL CHECK (via IN ('card', 'invite', 'receipt', 'owner')),
+		via            TEXT    NOT NULL CHECK (via IN ('card')),       -- how the link was made: a guest's card
 		joined_at      INTEGER,
 		left_at        INTEGER,
 		at             INTEGER NOT NULL,
@@ -148,17 +137,9 @@ var migrations = []string{
 		FOREIGN KEY (owner, meeting_id) REFERENCES meetings (owner, meeting_id)
 	) STRICT;
 	CREATE INDEX meeting_links_contact ON meeting_links (contact_id);
-	CREATE TABLE receipts (                                      -- a guest browser's proof of an earlier card
-		receipt_sha256 TEXT    PRIMARY KEY,
-		owner          TEXT    NOT NULL,
-		contact_id     TEXT    NOT NULL,
-		created_at     INTEGER NOT NULL,
-		FOREIGN KEY (contact_id, owner) REFERENCES contacts (id, owner) ON DELETE CASCADE
-	) STRICT;
-	CREATE INDEX receipts_contact ON receipts (contact_id);
 	CREATE TABLE idempotency (
 		owner          TEXT    NOT NULL,
-		key            TEXT    NOT NULL,                         -- 'card:<id>', 'attend:<meeting>:<participant>'
+		key            TEXT    NOT NULL,                         -- 'card:<card id>'
 		request_sha256 TEXT    NOT NULL,
 		status         INTEGER NOT NULL,                         -- the answer's status; never its body
 		contact_id     TEXT,
@@ -171,7 +152,7 @@ var migrations = []string{
 		at     INTEGER NOT NULL,
 		owner  TEXT,
 		event  TEXT    NOT NULL,                                 -- 'contact.created', 'contact.deleted', 'link.made', …
-		detail TEXT    NOT NULL DEFAULT ''                       -- 🔴 never a name, email, handle, title or note
+		detail TEXT    NOT NULL DEFAULT ''                       -- 🔴 never a name, email, title or note
 	) STRICT;`,
 }
 
